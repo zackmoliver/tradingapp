@@ -1,0 +1,15 @@
+{
+"title": "Batch 2 — Engine Math & Risk",
+"depends_on": ["Batch 1 — Contracts Freeze (Architect)"],
+"instructions": [
+"Implement vectorized payoff and Greeks (calls/puts/spreads) with numpy/pandas.",
+"Honor fees/slippage; add Position Sizing (fixed-fraction, volatility-scaled) with per-trade risk caps.",
+"Create invariant golden tests: put–call parity, symmetry, monotonicity.",
+"Files: engine/payoff.py, engine/greeks.py, engine/risk.py, tests/engine/test_goldens.py.",
+"No schema edits."
+],
+"acceptance": [
+"pytest green; tolerance ≤ 1e-6 on goldens.",
+"Performance: 100k grid < 2s on CI runner."
+]
+}

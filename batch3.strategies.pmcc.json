@@ -1,0 +1,14 @@
+{
+"title": "Batch 3 — Strategies (PMCC): LEAPS + Short Calls",
+"depends_on": ["Batch 2 — Engine Math & Risk", "Batch 2 — Signals & Panel Builder"],
+"instructions": [
+"Implement PMCC with LEAPS selection (Δ>0.80, 12–24 mo, 10–20% ITM) and short-call logic (Δ 0.30–0.45, 30–45 DTE).",
+"Management: roll short at 21 DTE or when challenged; theta and breakeven accounting.",
+"Unit tests + scenario fixtures; example YAML; summary.json outputs.",
+"No schema edits."
+],
+"acceptance": [
+"pytest green; PMCC scenarios match goldens.",
+"PR ≤ 900 LOC."
+]
+}

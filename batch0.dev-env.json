@@ -1,0 +1,16 @@
+{
+"title": "Batch 0 — Dev Env, CI & Stubs",
+"instructions": [
+"Add Dockerfile and .devcontainer/devcontainer.json with Python 3.13, Node 20, Rust/Tauri, Playwright deps.",
+"Create requirements.txt / pyproject.toml; ensure pnpm-lock.yaml and rust-toolchain.toml exist.",
+"Set up CI jobs: ruff/black, mypy/pyright, pytest, Playwright, ajv schema check, Tauri build.",
+"Add stubs: engine/strategy.py (interfaces), signals/registry.py (empty), schemas/summary.schema.json (skeleton), app/components/PayoffChart.props.ts (TS interface), app/state/position.ts (types; MM/DD/YYYY).",
+"Add tests/conftest.py and a MockDataProvider with canned OHLCV/options fixtures for deterministic tests.",
+"Open PR with template planning/presets/pr-template.md."
+],
+"acceptance": [
+"Containers build; repo boots in devcontainer.",
+"CI green with stubs and mocks.",
+"Local: `uv run pytest -q` and `pnpm build` both succeed."
+]
+}

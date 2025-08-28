@@ -1,0 +1,6 @@
+strategy: stock_position
+symbol: MSFT
+params:
+trend_ma: 20
+timeframe: 1w
+risk_fraction: 0.05

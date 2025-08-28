@@ -1,0 +1,13 @@
+{
+"title": "Batch 2 — Data Layer (Providers & Repository)",
+"depends_on": ["Batch 1 — Contracts Freeze (Architect)"],
+"instructions": [
+"Implement MockDataProvider for tests; yfinance adapter with local cache; options chain normalization; split/div adjustments.",
+"Expose repository API: get_prices, get_options_chain, cache controls.",
+"Files: data/provider.py, data/repository.py, tests/data/test_provider.py."
+],
+"acceptance": [
+"Deterministic fixtures; no network calls in CI.",
+"Repository unit tests green."
+]
+}

@@ -1,0 +1,13 @@
+{
+"title": "Batch 3 — Strategies (Debit): Call/Put Verticals",
+"depends_on": ["Batch 2 — Engine Math & Risk", "Batch 2 — Signals & Panel Builder"],
+"instructions": [
+"Implement params schemas, leg builders, simulate(); integrate Position Sizing.",
+"Unit tests + example YAML; summary.json outputs.",
+"No schema edits."
+],
+"acceptance": [
+"pytest green; sample outputs validate.",
+"PR ≤ 700 LOC."
+]
+}

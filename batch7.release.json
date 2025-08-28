@@ -1,0 +1,13 @@
+{
+"title": "Batch 7 — Packaging & Release",
+"depends_on": ["Batch 6 — GUI Indicator Lab (Toggles, Params, Profiles, A/B)"],
+"instructions": [
+"Tauri packaging for installers (Win; add Mac/Linux if configured).",
+"Release notes generator and CHANGELOG; ship example Indicator Profiles and Strategy Presets under examples/.",
+"Smoke tests on clean machine; document quickstart in README."
+],
+"acceptance": [
+"Installers build on CI; quickstart path confirmed.",
+"CI full suite green."
+]
+}

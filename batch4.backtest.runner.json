@@ -1,0 +1,16 @@
+{
+"title": "Batch 4 — Backtest Runner, Metrics & Diagnostics",
+"depends_on": ["Batch 2 — Engine Math & Risk", "Batch 2 — Signals & Panel Builder"],
+"instructions": [
+"Implement walk-forward CV with costs/slippage; seeded RNG; repository caching.",
+"Metrics: CAGR, MaxDD, Sharpe/Sortino, win rate, avg trade, exposure, turnover.",
+"Structured JSON logging of regime detection, strategy selection, rejects, lifecycle events.",
+"Trade attribution tables by strategy and market regime.",
+"Artifacts: runs/<run_id>/summary.json and report.html; schema validated by CI.",
+"CLI: `uv run backtest/run.py --config examples/XYZ.yml`."
+],
+"acceptance": [
+"Deterministic replays within epsilon; schema valid; logs written.",
+"PR ≤ 700 LOC."
+]
+}

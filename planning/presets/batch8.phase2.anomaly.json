@@ -1,0 +1,17 @@
+{
+"title": "Batch 8 — Phase 2: Pattern/Anomaly Detection (Autoencoder)",
+"depends_on": [
+"Batch 4 — Backtest Runner, Metrics & Diagnostics"
+],
+"instructions": [
+"Implement adaptive/pattern/autoencoder.py AnomalyDetector with fit() and detect().",
+"Train on 'normal' market windows from fixtures; set threshold from 99th percentile reconstruction error.",
+"Integrate with adaptive/manager.py to reduce position sizing or signal caution when anomalies occur (safe‑mode fallback to rule‑based allocations).",
+"Log anomaly scores and decisions with rationale; include code_version and data_snapshot.",
+"Unit tests: anomaly vs normal windows; ensure deterministic results via seeded tensors."
+],
+"acceptance": [
+"Detector flags anomalies on synthetic spikes; reduces sizing via engine/risk PositionSizer hook.",
+"Logs include rationale and version tags; tests green."
+]
+}

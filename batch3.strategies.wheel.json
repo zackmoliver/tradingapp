@@ -1,0 +1,14 @@
+{
+"title": "Batch 3 — Strategies (Wheel): CSP → Covered Calls",
+"depends_on": ["Batch 2 — Engine Math & Risk", "Batch 2 — Signals & Panel Builder"],
+"instructions": [
+"Implement full Wheel lifecycle with management rules (21 DTE rolls, tested short strike behavior, net-credit bias).",
+"Scenario fixtures covering assignment and roll cycles; unit tests.",
+"Example YAML; emits summary.json via backtest hooks.",
+"No schema edits."
+],
+"acceptance": [
+"Scenario tests pass; cashflows/dates correct (MM/DD/YYYY UI).",
+"PR ≤ 800 LOC."
+]
+}

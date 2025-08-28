@@ -1,0 +1,14 @@
+{
+"title": "Batch 2 — Signals & Panel Builder",
+"depends_on": ["Batch 1 — Contracts Freeze (Architect)"],
+"instructions": [
+"Implement registry entries for SMA, EMA, RSI, MACD, Bollinger, ATR, Donchian, Fibonacci, Ichimoku, ADX, BB-Width, IV Rank, HV with param bounds and output schemas.",
+"Build panel with column validation and Parquet output in data/panels/.",
+"Files: signals/registry.py, signals/build_panel.py, tests/signals/test_registry.py.",
+"No business rule changes."
+],
+"acceptance": [
+"Panel build passes; columns match schemas.",
+"Param bounds enforced; defaults documented."
+]
+}

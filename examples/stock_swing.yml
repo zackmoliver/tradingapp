@@ -1,0 +1,7 @@
+strategy: stock_swing
+symbol: AAPL
+params:
+entry_signal: rsi_oversold
+exit_signal: rsi_overbought
+timeframe: 1d
+risk_fraction: 0.02

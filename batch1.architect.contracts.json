@@ -1,0 +1,15 @@
+{
+"title": "Batch 1 — Contracts Freeze (Architect)",
+"instructions": [
+"Ingest business spec under planning/architecture.md and framework/*.md.",
+"Emit/finalize interfaces and schemas only: engine/strategy.py, engine/risk.py (PositionSizer interfaces), data/provider.py, data/repository.py, signals/registry.py (specs), schemas/summary.schema.json (KPIs, equity curve, attribution), app/components/PayoffChart.props.ts, app/state/position.ts (types only; MM/DD/YYYY).",
+"Provide example fixtures for schema validation; wire ajv CI job to validate runs/**/summary.json.",
+"Do **not** implement business logic.",
+"Open PR using planning/presets/pr-template.md."
+],
+"acceptance": [
+"Mypy/pyright clean; TypeScript types compile.",
+"AJV validates example fixtures.",
+"No business logic present; only contracts/schemas/types."
+]
+}

@@ -1,0 +1,16 @@
+{
+"title": "Batch 5 — GUI Wiring: Position Builder, Payoff, Trade Finder, Presets",
+"depends_on": ["Batch 1 — Contracts Freeze (Architect)", "Batch 2 — Engine Math & Risk", "Batch 2 — Signals & Panel Builder", "Batch 4 — Backtest Runner, Metrics & Diagnostics"],
+"instructions": [
+"Implement Position Builder (validated leg grid) with JSON save/load.",
+"Render Plotly payoff with breakevens & roll preview.",
+"Trade Finder: filters + populate-from-signal.",
+"Add Config Manager: CRUD Strategy Presets (parameter sets per strategy).",
+"Dates throughout UI = MM/DD/YYYY.",
+"Add Storybook + Playwright flows."
+],
+"acceptance": [
+"Next.js/Tauri builds; e2e flows green; presets persist.",
+"PR ≤ 900 LOC (split if larger)."
+]
+}

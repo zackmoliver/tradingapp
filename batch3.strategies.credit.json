@@ -1,0 +1,14 @@
+{
+"title": "Batch 3 — Strategies (Credit): Bull Put, Bear Call, Iron Condor",
+"depends_on": ["Batch 2 — Engine Math & Risk", "Batch 2 — Signals & Panel Builder"],
+"instructions": [
+"Implement params schemas, leg builders, simulate(); integrate Position Sizing.",
+"Add unit tests and scenario fixtures; produce example YAML under examples/.",
+"Emit summary.json via backtest hooks (use MockData in CI).",
+"No schema edits."
+],
+"acceptance": [
+"pytest green; sample runs write valid summary.json.",
+"PR ≤ 800 LOC."
+]
+}

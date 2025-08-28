@@ -1,0 +1,618 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tradingapp.com/schemas/summary.schema.json",
+  "title": "Backtest Summary Report Schema",
+  "description": "JSON Schema for validating backtest summary reports with KPIs, equity curve, and attribution analysis",
+  "type": "object",
+  "required": [
+    "run_id",
+    "strategy_id",
+    "execution_info",
+    "performance_summary",
+    "equity_curve",
+    "trade_summary",
+    "attribution",
+    "risk_metrics",
+    "metadata"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Unique identifier for the backtest run",
+      "pattern": "^[a-zA-Z0-9-_]+$"
+    },
+    "strategy_id": {
+      "type": "string",
+      "description": "Identifier of the strategy being tested",
+      "pattern": "^[a-zA-Z0-9-_]+$"
+    },
+    "execution_info": {
+      "$ref": "#/$defs/ExecutionInfo"
+    },
+    "performance_summary": {
+      "$ref": "#/$defs/PerformanceSummary"
+    },
+    "equity_curve": {
+      "$ref": "#/$defs/EquityCurve"
+    },
+    "trade_summary": {
+      "$ref": "#/$defs/TradeSummary"
+    },
+    "attribution": {
+      "$ref": "#/$defs/Attribution"
+    },
+    "risk_metrics": {
+      "$ref": "#/$defs/RiskMetrics"
+    },
+    "drawdown_analysis": {
+      "$ref": "#/$defs/DrawdownAnalysis"
+    },
+    "monthly_returns": {
+      "$ref": "#/$defs/MonthlyReturns"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ExecutionInfo": {
+      "type": "object",
+      "description": "Information about the backtest execution",
+      "required": ["start_date", "end_date", "initial_capital", "final_capital", "status"],
+      "properties": {
+        "start_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Backtest start date (YYYY-MM-DD)"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Backtest end date (YYYY-MM-DD)"
+        },
+        "initial_capital": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Starting capital amount"
+        },
+        "final_capital": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Ending capital amount"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "failed", "partial"],
+          "description": "Execution status"
+        },
+        "execution_time_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total execution time in seconds"
+        },
+        "data_quality_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Data quality score (0-1)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PerformanceSummary": {
+      "type": "object",
+      "description": "Key performance indicators and metrics",
+      "required": [
+        "total_return",
+        "annualized_return",
+        "volatility",
+        "sharpe_ratio",
+        "max_drawdown",
+        "win_rate",
+        "profit_factor"
+      ],
+      "properties": {
+        "total_return": {
+          "type": "number",
+          "description": "Total return as decimal (e.g., 0.15 for 15%)"
+        },
+        "annualized_return": {
+          "type": "number",
+          "description": "Annualized return as decimal"
+        },
+        "volatility": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Annualized volatility as decimal"
+        },
+        "sharpe_ratio": {
+          "type": "number",
+          "description": "Risk-adjusted return metric"
+        },
+        "sortino_ratio": {
+          "type": "number",
+          "description": "Downside risk-adjusted return metric"
+        },
+        "calmar_ratio": {
+          "type": "number",
+          "description": "Return to max drawdown ratio"
+        },
+        "max_drawdown": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum drawdown as decimal (e.g., 0.1 for 10%)"
+        },
+        "max_drawdown_duration_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Duration of maximum drawdown in days"
+        },
+        "win_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Percentage of winning trades as decimal"
+        },
+        "profit_factor": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Ratio of gross profit to gross loss"
+        },
+        "expectancy": {
+          "type": "number",
+          "description": "Expected value per trade"
+        },
+        "beta": {
+          "type": "number",
+          "description": "Beta relative to benchmark"
+        },
+        "alpha": {
+          "type": "number",
+          "description": "Alpha relative to benchmark"
+        },
+        "information_ratio": {
+          "type": "number",
+          "description": "Active return to tracking error ratio"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EquityCurve": {
+      "type": "object",
+      "description": "Portfolio value over time",
+      "required": ["data_points"],
+      "properties": {
+        "data_points": {
+          "type": "array",
+          "description": "Array of timestamped portfolio values",
+          "items": {
+            "$ref": "#/$defs/EquityPoint"
+          },
+          "minItems": 1
+        },
+        "benchmark_data": {
+          "type": "array",
+          "description": "Benchmark performance data",
+          "items": {
+            "$ref": "#/$defs/EquityPoint"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "EquityPoint": {
+      "type": "object",
+      "description": "Single equity curve data point",
+      "required": ["timestamp", "portfolio_value"],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp"
+        },
+        "portfolio_value": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total portfolio value"
+        },
+        "cash": {
+          "type": "number",
+          "description": "Cash balance"
+        },
+        "positions_value": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Value of all positions"
+        },
+        "unrealized_pnl": {
+          "type": "number",
+          "description": "Unrealized profit/loss"
+        },
+        "realized_pnl": {
+          "type": "number",
+          "description": "Realized profit/loss"
+        },
+        "drawdown": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Current drawdown from peak"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TradeSummary": {
+      "type": "object",
+      "description": "Summary of all trades executed",
+      "required": [
+        "total_trades",
+        "winning_trades",
+        "losing_trades",
+        "average_win",
+        "average_loss",
+        "largest_win",
+        "largest_loss"
+      ],
+      "properties": {
+        "total_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of completed trades"
+        },
+        "winning_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of profitable trades"
+        },
+        "losing_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of losing trades"
+        },
+        "average_win": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average profit per winning trade"
+        },
+        "average_loss": {
+          "type": "number",
+          "maximum": 0,
+          "description": "Average loss per losing trade (negative)"
+        },
+        "largest_win": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Largest single trade profit"
+        },
+        "largest_loss": {
+          "type": "number",
+          "maximum": 0,
+          "description": "Largest single trade loss (negative)"
+        },
+        "average_trade_duration_days": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average trade duration in days"
+        },
+        "total_commissions": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total commissions paid"
+        },
+        "total_fees": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total fees paid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Attribution": {
+      "type": "object",
+      "description": "Performance attribution analysis",
+      "required": ["by_strategy", "by_asset_class", "by_direction"],
+      "properties": {
+        "by_strategy": {
+          "type": "object",
+          "description": "Performance breakdown by strategy component",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "$ref": "#/$defs/AttributionMetrics"
+            }
+          },
+          "additionalProperties": false
+        },
+        "by_asset_class": {
+          "type": "object",
+          "description": "Performance breakdown by asset class",
+          "properties": {
+            "equities": { "$ref": "#/$defs/AttributionMetrics" },
+            "options": { "$ref": "#/$defs/AttributionMetrics" },
+            "etfs": { "$ref": "#/$defs/AttributionMetrics" },
+            "cash": { "$ref": "#/$defs/AttributionMetrics" }
+          },
+          "additionalProperties": false
+        },
+        "by_direction": {
+          "type": "object",
+          "description": "Performance breakdown by long/short direction",
+          "required": ["long", "short"],
+          "properties": {
+            "long": { "$ref": "#/$defs/AttributionMetrics" },
+            "short": { "$ref": "#/$defs/AttributionMetrics" }
+          },
+          "additionalProperties": false
+        },
+        "by_sector": {
+          "type": "object",
+          "description": "Performance breakdown by sector",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "$ref": "#/$defs/AttributionMetrics"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "AttributionMetrics": {
+      "type": "object",
+      "description": "Performance metrics for attribution category",
+      "required": ["total_return", "contribution_to_return", "trade_count"],
+      "properties": {
+        "total_return": {
+          "type": "number",
+          "description": "Total return for this category"
+        },
+        "contribution_to_return": {
+          "type": "number",
+          "description": "Contribution to overall portfolio return"
+        },
+        "trade_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of trades in this category"
+        },
+        "win_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Win rate for this category"
+        },
+        "average_holding_period_days": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average holding period in days"
+        },
+        "max_exposure": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum exposure in this category"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RiskMetrics": {
+      "type": "object",
+      "description": "Risk analysis metrics",
+      "required": ["var_95", "var_99", "expected_shortfall"],
+      "properties": {
+        "var_95": {
+          "type": "number",
+          "description": "Value at Risk at 95% confidence level"
+        },
+        "var_99": {
+          "type": "number",
+          "description": "Value at Risk at 99% confidence level"
+        },
+        "expected_shortfall": {
+          "type": "number",
+          "description": "Expected shortfall (conditional VaR)"
+        },
+        "skewness": {
+          "type": "number",
+          "description": "Return distribution skewness"
+        },
+        "kurtosis": {
+          "type": "number",
+          "description": "Return distribution kurtosis"
+        },
+        "tail_ratio": {
+          "type": "number",
+          "description": "Ratio of 95th to 5th percentile returns"
+        },
+        "max_leverage": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum leverage used"
+        },
+        "average_leverage": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average leverage used"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DrawdownAnalysis": {
+      "type": "object",
+      "description": "Detailed drawdown analysis",
+      "properties": {
+        "drawdown_periods": {
+          "type": "array",
+          "description": "All significant drawdown periods",
+          "items": {
+            "$ref": "#/$defs/DrawdownPeriod"
+          }
+        },
+        "recovery_times": {
+          "type": "array",
+          "description": "Time to recover from drawdowns",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Recovery time in days"
+          }
+        },
+        "average_recovery_time_days": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average recovery time in days"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DrawdownPeriod": {
+      "type": "object",
+      "description": "Individual drawdown period",
+      "required": ["start_date", "end_date", "peak_value", "trough_value", "drawdown_percent"],
+      "properties": {
+        "start_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Drawdown start date"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Drawdown end date"
+        },
+        "peak_value": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Portfolio value at peak"
+        },
+        "trough_value": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Portfolio value at trough"
+        },
+        "drawdown_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Drawdown percentage"
+        },
+        "duration_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Drawdown duration in days"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MonthlyReturns": {
+      "type": "object",
+      "description": "Monthly return breakdown",
+      "properties": {
+        "returns": {
+          "type": "array",
+          "description": "Monthly return data",
+          "items": {
+            "$ref": "#/$defs/MonthlyReturn"
+          }
+        },
+        "best_month": {
+          "type": "number",
+          "description": "Best monthly return"
+        },
+        "worst_month": {
+          "type": "number",
+          "description": "Worst monthly return"
+        },
+        "positive_months": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of positive months"
+        },
+        "negative_months": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of negative months"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MonthlyReturn": {
+      "type": "object",
+      "description": "Single month return data",
+      "required": ["year", "month", "return"],
+      "properties": {
+        "year": {
+          "type": "integer",
+          "minimum": 1900,
+          "maximum": 2100,
+          "description": "Year"
+        },
+        "month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Month (1-12)"
+        },
+        "return": {
+          "type": "number",
+          "description": "Monthly return as decimal"
+        },
+        "benchmark_return": {
+          "type": "number",
+          "description": "Benchmark return for the month"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metadata": {
+      "type": "object",
+      "description": "Additional metadata and configuration",
+      "required": ["schema_version", "generated_at"],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Schema version (semantic versioning)"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Report generation timestamp"
+        },
+        "generator": {
+          "type": "string",
+          "description": "Software that generated this report"
+        },
+        "strategy_parameters": {
+          "type": "object",
+          "description": "Strategy configuration parameters"
+        },
+        "risk_parameters": {
+          "type": "object",
+          "description": "Risk management parameters used"
+        },
+        "data_sources": {
+          "type": "array",
+          "description": "Data sources used in backtest",
+          "items": {
+            "type": "string"
+          }
+        },
+        "benchmark": {
+          "type": "string",
+          "description": "Benchmark symbol used for comparison"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "Currency code (ISO 4217)"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes or comments"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

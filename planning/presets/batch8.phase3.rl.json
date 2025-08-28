@@ -1,0 +1,18 @@
+{
+"title": "Batch 8 — Phase 3: RL Strategy Allocation (DQN)",
+"depends_on": [
+"Batch 4 — Backtest Runner, Metrics & Diagnostics",
+"Batch 2 — Signals & Panel Builder"
+],
+"instructions": [
+"Implement adaptive/rl/agent.py with DQN architecture and replay buffer; actions = strategy names; state = regime features.",
+"Add epsilon‑greedy policy with decaying epsilon; fixed seeds for CI.",
+"Integrate in adaptive/manager.py: get_strategy_allocation(state) returns StrategyAllocation with rationale, code_version, data_snapshot.",
+"Safe‑mode: unseen regime or unstable Q‑values -> fall back to rule‑based allocation; log reason.",
+"Unit tests on small synthetic MDP verifying policy improvement and safe‑mode behavior."
+],
+"acceptance": [
+"Deterministic unit tests pass; allocation artifacts saved.",
+"Explainability present (top‑Q actions, state features)."
+]
+}

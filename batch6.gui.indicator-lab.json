@@ -1,0 +1,17 @@
+{
+"title": "Batch 6 — GUI Indicator Lab (Toggles, Params, Profiles, A/B)",
+"depends_on": ["Batch 4 — Backtest Runner, Metrics & Diagnostics", "Batch 5 — GUI Wiring: Position Builder, Payoff, Trade Finder, Presets"],
+"instructions": [
+"Sidebar toggles per indicator + quick groups (Trend/Momentum/Volatility/Breadth).",
+"Parameter sliders/inputs with bounds; show defaults + last winning config.",
+"Save/Load Indicator Profiles (scoped by Market Regime & Strategy) in data/profiles/indicators/*.json.",
+"Experiment Runner: Regime/Strategy/Universe pickers; Run, A/B Compare, Export buttons.",
+"A/B mode: side-by-side KPIs and equity curves; bootstrap CI hints (win rate, avg trade).",
+"Backend: POST /experiments/run { regime, strategy, indicators_profile_id, universe, period } → run_id.",
+"Tests: Storybook; Playwright toggles→run→KPI render; JSON schema for profiles; MM/DD/YYYY dates."
+],
+"acceptance": [
+"Profiles persist and reload; A/B KPIs render; Playwright green.",
+"PR ≤ 1000 LOC (split UI/server if needed)."
+]
+}
