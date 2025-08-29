@@ -3,14 +3,12 @@
   "productName": "trading-app",
   "version": "0.1.0",
   "identifier": "com.tradingapp.dev",
-
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:8080",
     "frontendDist": "../dist"
   },
-
   "app": {
     "security": { "csp": null },
     "windows": [
@@ -23,7 +21,6 @@
       }
     ]
   },
-
   "bundle": {
     "active": true,
     "targets": "all",
@@ -34,11 +31,5 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
-  },
-
-  "plugins": {
-    "opener": {
-      "scope": ["https://*", "http://*", "mailto:*", "tel:*"]
-    }
   }
 }

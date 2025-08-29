@@ -1,11 +1,31 @@
 /**
  * TypeScript types for Backtest Results
- * 
- * These types match our Python BacktestRunner output and Rust Tauri backend,
+ *
+ * These types match our Rust Tauri backend structure,
  * ensuring type safety across the entire application stack.
+ * Updated for Tauri v2.4.0 compatibility.
  */
 
-export interface BacktestResult {
+// Simple structure matching Rust backend
+export interface BacktestPoint {
+  t: string;           // Date in MM/DD/YYYY format
+  equity: number;      // Portfolio value
+  drawdown: number;    // Drawdown percentage
+}
+
+export interface BacktestSummary {
+  strategy: string;
+  start: string;       // MM/DD/YYYY format
+  end: string;         // MM/DD/YYYY format
+  trades: number;
+  win_rate: number;    // 0.0 to 1.0
+  cagr: number;        // Compound Annual Growth Rate
+  max_dd: number;      // Maximum drawdown (negative value)
+  equity_curve: BacktestPoint[];
+}
+
+// For compatibility with existing components
+export interface BacktestResult extends BacktestSummary {
   run_id: string;
   strategy_id: string;
   execution_info: ExecutionInfo;
@@ -124,6 +144,27 @@ export interface ChartDataPoint {
   value: number;
   label?: string;
 }
+
+// Backtest parameters for run_backtest command
+export interface BacktestParams {
+  ticker: string;
+  start_date: string;    // MM/DD/YYYY format
+  end_date: string;      // MM/DD/YYYY format
+  strategy: 'PMCC' | 'Wheel' | 'CoveredCall' | 'iron_condor' | 'bull_put_spread';
+  seed?: number;         // For deterministic results
+  initial_capital: number;
+}
+
+// Strategy options for the UI
+export const STRATEGY_OPTIONS = [
+  { value: 'PMCC', label: 'Poor Man\'s Covered Call' },
+  { value: 'Wheel', label: 'The Wheel Strategy' },
+  { value: 'CoveredCall', label: 'Covered Call' },
+  { value: 'iron_condor', label: 'Iron Condor' },
+  { value: 'bull_put_spread', label: 'Bull Put Spread' }
+] as const;
+
+export type StrategyType = typeof STRATEGY_OPTIONS[number]['value'];
 
 // Strategy configuration types
 export interface StrategyConfig {
