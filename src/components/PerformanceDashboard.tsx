@@ -42,89 +42,12 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   backtestResult,
   className = '',
 }) => {
-  // Show placeholder while data is loading
-  if (!backtestResult) {
-    return <div className="loading-placeholder">Loading performance data…</div>;
-  }
-
-  // Tauri returns snake_case; cast to any to extract fields not in the TS type
-  const equityCurve = (backtestResult as any).equity_curve as Array<{
-    t: string;
-    equity: number;
-  }> | undefined;
-
-  // Show placeholder if the equity curve is missing or empty
-  if (!Array.isArray(equityCurve) || equityCurve.length === 0) {
-    return <div className="loading-placeholder">No equity data available…</div>;
-  }
-
-  // Prepare chart data
-  const equityChartData: ChartDataPoint[] = equityCurve.map((point) => ({
+  // Transform equity curve data for chart
+  const equityChartData: ChartDataPoint[] = backtestResult.equity_curve.map(point => ({
     date: point.t,
     value: point.equity,
-    label: formatDate(point.t),
+    label: formatDate(point.t)
   }));
-
-  // Fallback values for optional metrics
-  const cagr = (backtestResult as any).cagr ?? 0;
-  const trades = (backtestResult as any).trades ?? 0;
-  const win_rate = (backtestResult as any).win_rate ?? 0;
-  const max_dd = (backtestResult as any).max_dd ?? 0;
-
-  const strategy = backtestResult.strategy ?? '';
-  const start = backtestResult.start ?? '';
-  const end = backtestResult.end ?? '';
-
-  const performanceMetrics: PerformanceMetricTile[] = [
-    {
-      title: 'CAGR',
-      value: cagr,
-      format: 'percentage',
-      trend: cagr > 0 ? 'up' : 'down',
-      color: cagr > 0 ? 'success' : 'danger',
-      description: 'Compound Annual Growth Rate',
-    },
-    {
-      title: 'Total Trades',
-      value: trades,
-      format: 'number',
-      trend: 'neutral',
-      color: 'neutral',
-      description: 'Number of trades executed',
-    },
-    {
-      title: 'Win Rate',
-      value: win_rate,
-      format: 'percentage',
-      trend: win_rate > 0.5 ? 'up' : 'down',
-      color: win_rate > 0.5 ? 'success' : 'danger',
-      description: 'Percentage of winning trades',
-    },
-    {
-      title: 'Max Drawdown',
-      value: Math.abs(max_dd),
-      format: 'percentage',
-      trend: 'down',
-      color: Math.abs(max_dd) < 0.1 ? 'success' : 'warning',
-      description: 'Maximum portfolio decline',
-    },
-    {
-      title: 'Strategy',
-      value: strategy,
-      format: 'string',
-      trend: 'neutral',
-      color: 'neutral',
-      description: 'Trading strategy used',
-    },
-    {
-      title: 'Duration',
-      value: `${start} - ${end}`,
-      format: 'string',
-      trend: 'neutral',
-      color: 'neutral',
-      description: 'Backtest period',
-    },
-  ];
 
   return (
     <div className={`performance-dashboard space-y-6 ${className}`}>
@@ -133,29 +56,24 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-neutral-900">Performance Dashboard</h1>
-            <p className="text-neutral-600 mt-1">Strategy: {strategy}</p>
+            <p className="text-neutral-600 mt-1">
+              Comprehensive backtest analysis and metrics
+            </p>
           </div>
           <div className="flex items-center space-x-4 text-sm text-neutral-500">
             <div className="flex items-center space-x-1">
               <Calendar className="w-4 h-4" />
-              <span>
-                {start} - {end}
-              </span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Clock className="w-4 h-4" />
-              <span>{trades} trades</span>
+              <span>Live Results</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Performance Metrics Grid */}
-      <div className="metrics-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {performanceMetrics.map((metric, index) => (
-          <MetricTile key={index} metric={metric} />
-        ))}
-      </div>
+      {/* Result Summary Cards */}
+      <ResultSummary
+        summary={backtestResult}
+        className="animate-fade-in"
+      />
 
       {/* Equity Curve Chart */}
       <div className="equity-chart bg-white rounded-lg shadow-sm border border-neutral-200 p-6">
