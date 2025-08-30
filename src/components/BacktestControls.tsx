@@ -11,17 +11,30 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { z } from 'zod';
-import { 
-  Play, 
-  Calendar, 
-  DollarSign, 
-  TrendingUp, 
-  AlertCircle, 
+import {
+  Play,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  AlertCircle,
   Loader2,
-  Settings
+  Settings,
+  RotateCcw,
+  Save
 } from 'lucide-react';
-import { BacktestParams, BacktestSummary, STRATEGY_OPTIONS, StrategyType } from '../types/backtest';
+import { BacktestParams, BacktestSummary, StrategyType } from '../types/backtest';
 import { TauriAPI, TauriUtils } from '../lib/tauri';
+import { preferencesManager } from '../lib/prefs';
+import { showSuccessToast, showErrorToast, showInfoToast } from '../lib/toast';
+
+// Strategy options for the UI
+const STRATEGY_OPTIONS = [
+  { value: 'PMCC' as const, label: 'Poor Man\'s Covered Call' },
+  { value: 'Wheel' as const, label: 'The Wheel Strategy' },
+  { value: 'CoveredCall' as const, label: 'Covered Call' },
+  { value: 'iron_condor' as const, label: 'Iron Condor' },
+  { value: 'bull_put_spread' as const, label: 'Bull Put Spread' }
+];
 
 // Zod validation schema
 const backtestSchema = z.object({
@@ -75,7 +88,7 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
   isRunning = false,
   className = ''
 }) => {
-  // Form state
+  // Form state with default values (will be overridden by preferences)
   const [formData, setFormData] = useState<BacktestFormData>({
     ticker: 'AAPL',
     start_date: '01/01/2023',
@@ -89,6 +102,10 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
   const [isValid, setIsValid] = useState(false);
   const [touched, setTouched] = useState<Partial<Record<keyof BacktestFormData, boolean>>>({});
 
+  // Preferences state
+  const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+
   // Debounced validation
   const validateForm = useCallback(
     TauriUtils.debounce((data: BacktestFormData) => {
@@ -99,7 +116,7 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
       } catch (error) {
         if (error instanceof z.ZodError) {
           const newErrors: Partial<Record<keyof BacktestFormData, string>> = {};
-          error.errors.forEach((err) => {
+          error.issues.forEach((err: any) => {
             const field = err.path[0] as keyof BacktestFormData;
             newErrors[field] = err.message;
           });
@@ -111,10 +128,35 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
     []
   );
 
+  // Load preferences on component mount
+  useEffect(() => {
+    const loadInitialPrefs = async () => {
+      try {
+        setIsLoadingPrefs(true);
+        const savedPrefs = await preferencesManager.load();
+
+        // Update form data with loaded preferences
+        setFormData(savedPrefs);
+
+        console.log('Preferences loaded:', savedPrefs);
+        showInfoToast('Settings loaded', 'Your saved preferences have been restored');
+      } catch (error) {
+        console.error('Failed to load preferences:', error);
+        // Keep default values if loading fails
+      } finally {
+        setIsLoadingPrefs(false);
+      }
+    };
+
+    loadInitialPrefs();
+  }, []);
+
   // Validate on form data change
   useEffect(() => {
-    validateForm(formData);
-  }, [formData, validateForm]);
+    if (!isLoadingPrefs) {
+      validateForm(formData);
+    }
+  }, [formData, validateForm, isLoadingPrefs]);
 
   // Handle field changes
   const handleFieldChange = useCallback((field: keyof BacktestFormData, value: string | number) => {
@@ -125,8 +167,8 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
   // Handle form submission
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!isValid || isRunning) return;
+
+    if (!isValid || isRunning || isLoadingPrefs) return;
 
     try {
       onBacktestStart?.();
@@ -136,21 +178,102 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
         seed: TauriUtils.generateSeed()
       };
 
+      // Save preferences before running backtest
+      try {
+        setIsSavingPrefs(true);
+        await preferencesManager.save(formData);
+        console.log('Preferences saved before backtest execution');
+        showSuccessToast('Settings saved', 'Your preferences have been saved');
+      } catch (prefError) {
+        console.warn('Failed to save preferences:', prefError);
+        // Continue with backtest even if preferences save fails
+      } finally {
+        setIsSavingPrefs(false);
+      }
+
       const result = await TauriAPI.runBacktest(params);
       onBacktestComplete?.(result);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Backtest execution failed';
       onBacktestError?.(errorMessage);
     }
-  }, [formData, isValid, isRunning, onBacktestStart, onBacktestComplete, onBacktestError]);
+  }, [formData, isValid, isRunning, isLoadingPrefs, onBacktestStart, onBacktestComplete, onBacktestError]);
+
+  // Handle manual preferences save
+  const handleSavePrefs = useCallback(async () => {
+    if (isSavingPrefs || !isValid) return;
+
+    try {
+      setIsSavingPrefs(true);
+      await preferencesManager.save(formData);
+      console.log('Preferences saved manually');
+      showSuccessToast('Settings saved', 'Your preferences have been saved successfully');
+    } catch (error) {
+      console.error('Failed to save preferences:', error);
+      showErrorToast('Save failed', 'Failed to save preferences. Please try again.');
+    } finally {
+      setIsSavingPrefs(false);
+    }
+  }, [formData, isValid, isSavingPrefs]);
+
+  // Handle reset to defaults
+  const handleResetPrefs = useCallback(async () => {
+    try {
+      const defaults = await preferencesManager.reset();
+      setFormData(defaults);
+      setTouched({});
+      console.log('Preferences reset to defaults');
+      showInfoToast('Settings reset', 'Preferences have been reset to defaults');
+    } catch (error) {
+      console.error('Failed to reset preferences:', error);
+      showErrorToast('Reset failed', 'Failed to reset preferences. Please try again.');
+    }
+  }, []);
 
   return (
     <div className={`backtest-controls bg-white rounded-lg shadow-sm border border-neutral-200 p-6 ${className}`}>
       {/* Header */}
-      <div className="flex items-center space-x-2 mb-6">
-        <Settings className="w-5 h-5 text-primary-600" />
-        <h2 className="text-lg font-semibold text-neutral-900">Backtest Controls</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-2">
+          <Settings className="w-5 h-5 text-primary-600" />
+          <h2 className="text-lg font-semibold text-neutral-900">Backtest Controls</h2>
+        </div>
+
+        {/* Preferences Actions */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleSavePrefs}
+            disabled={isSavingPrefs || !isValid || isLoadingPrefs}
+            className="inline-flex items-center px-2 py-1 text-xs font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 rounded hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Save current settings as defaults"
+          >
+            {isSavingPrefs ? (
+              <div className="w-3 h-3 border border-neutral-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Save className="w-3 h-3" />
+            )}
+          </button>
+
+          <button
+            onClick={handleResetPrefs}
+            disabled={isLoadingPrefs || isRunning}
+            className="inline-flex items-center px-2 py-1 text-xs font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 rounded hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Reset to default settings"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+        </div>
       </div>
+
+      {/* Loading State */}
+      {isLoadingPrefs && (
+        <div className="flex items-center justify-center py-4 mb-4 bg-neutral-50 rounded-lg border border-neutral-200">
+          <div className="flex items-center space-x-2 text-sm text-neutral-600">
+            <div className="w-4 h-4 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
+            <span>Loading saved preferences...</span>
+          </div>
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -292,14 +415,19 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={!isValid || isRunning}
+          disabled={!isValid || isRunning || isLoadingPrefs}
           className={`w-full flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white transition-colors ${
-            !isValid || isRunning
+            !isValid || isRunning || isLoadingPrefs
               ? 'bg-neutral-400 cursor-not-allowed'
               : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
           }`}
         >
-          {isRunning ? (
+          {isLoadingPrefs ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Loading Settings...
+            </>
+          ) : isRunning ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Running Backtest...
@@ -313,11 +441,21 @@ const BacktestControls: React.FC<BacktestControlsProps> = ({
         </button>
 
         {/* Form Status */}
-        {!isValid && Object.keys(touched).length > 0 && (
+        {!isValid && Object.keys(touched).length > 0 && !isLoadingPrefs && (
           <div className="mt-4 p-3 bg-warning-50 border border-warning-200 rounded-md">
             <p className="text-sm text-warning-800 flex items-center">
               <AlertCircle className="w-4 h-4 mr-2" />
               Please fix the validation errors above before running the backtest.
+            </p>
+          </div>
+        )}
+
+        {/* Preferences Status */}
+        {isSavingPrefs && (
+          <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-md">
+            <p className="text-sm text-primary-800 flex items-center">
+              <div className="w-4 h-4 mr-2 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+              Saving preferences...
             </p>
           </div>
         )}

@@ -1,0 +1,15 @@
+Desktop Build Log - 2025-08-30T01:36:21.857Z
+[2025-08-30T01:36:21.858Z] 🔍 Checking prerequisites...
+[2025-08-30T01:36:21.902Z] ℹ️  INFO: Node.js version: v22.18.0
+[2025-08-30T01:36:22.330Z] ℹ️  INFO: npm version: 10.9.3
+[2025-08-30T01:36:22.548Z] ℹ️  INFO: Rust version: rustc 1.89.0 (29483883e 2025-08-04)
+[2025-08-30T01:36:22.550Z] ✅ SUCCESS: All prerequisites are satisfied
+[2025-08-30T01:36:22.552Z] 🧹 Cleaning previous build artifacts...
+[2025-08-30T01:36:22.554Z] ✅ SUCCESS: Build artifacts cleaned
+[2025-08-30T01:36:22.555Z] 📦 Checking dependencies...
+[2025-08-30T01:36:22.557Z] ℹ️  INFO: Dependencies already installed
+[2025-08-30T01:36:22.559Z] 🏗️  Building frontend...
+[2025-08-30T01:36:22.560Z] Running: npm run build
+[2025-08-30T01:36:25.412Z] ❌ ERROR: Command failed: npm run build
+[2025-08-30T01:36:25.413Z] ❌ ERROR: Exit code: 2
+[2025-08-30T01:36:25.414Z] ❌ ERROR: Frontend build failed

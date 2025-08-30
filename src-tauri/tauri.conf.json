@@ -10,14 +10,32 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "security": { "csp": null },
+    "security": {
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Main application capabilities",
+          "windows": ["main"],
+          "permissions": [
+            {
+              "identifier": "core:default"
+            },
+            {
+              "identifier": "core:path:default"
+            }
+          ]
+        }
+      ]
+    },
     "windows": [
       {
         "title": "Trading App",
         "width": 1200,
         "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "label": "main"
       }
     ]
   },

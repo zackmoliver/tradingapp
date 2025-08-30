@@ -1,16 +1,24 @@
 [package]
 name = "trading-engine"
 version = "0.1.0"
-description = "Trading App (Tauri v2)"
+description = "A Tauri-based trading engine application"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT OR Apache-2.0"
+repository = ""
+default-run = "trading-engine"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.60"
 
 [build-dependencies]
-tauri-build = { version = "2.4.0", features = [] }
+tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.4.0", features = [] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-chrono = "0.4"
-tokio = { version = "1.0", features = ["full", "time"] }
+chrono = { version = "0.4", features = ["serde"] }
+tauri = { version = "2.0", features = [] }  # REMOVED: features = ["api-all"]
+tokio = { version = "1.0", features = ["full"] }
+
+[features]
+default = [ "custom-protocol" ]
+custom-protocol = [ "tauri/custom-protocol" ]

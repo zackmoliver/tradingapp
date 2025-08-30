@@ -10,18 +10,21 @@
  * Updates instantly when new BacktestSummary data arrives.
  */
 
-import React from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Calendar, 
-  Target, 
-  Award, 
+import React, { useState } from 'react';
+import {
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  Target,
+  Award,
   AlertTriangle,
   BarChart3,
-  DollarSign
+  Download,
+  CheckCircle
 } from 'lucide-react';
 import { BacktestSummary } from '../types/backtest';
+import { safeExportBacktestToCsv } from '../lib/exportCsv';
+import { showSuccessToast, showErrorToast } from '../lib/toast';
 
 interface ResultSummaryProps {
   summary: BacktestSummary;
@@ -102,6 +105,10 @@ const SummaryCard: React.FC<SummaryCardProps> = ({
 };
 
 const ResultSummary: React.FC<ResultSummaryProps> = ({ summary, className = '' }) => {
+  // CSV export state
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
+
   // Format percentage values to 2 decimal places
   const formatPercentage = (value: number): string => {
     return `${(value * 100).toFixed(2)}%`;
@@ -110,6 +117,31 @@ const ResultSummary: React.FC<ResultSummaryProps> = ({ summary, className = '' }
   // Format number values
   const formatNumber = (value: number): string => {
     return value.toLocaleString();
+  };
+
+  // Handle CSV export
+  const handleCsvExport = async () => {
+    if (isExporting) return;
+
+    setIsExporting(true);
+    setExportSuccess(false);
+
+    try {
+      await safeExportBacktestToCsv(summary);
+      setExportSuccess(true);
+
+      // Show success toast
+      showSuccessToast('CSV exported', 'Backtest data has been exported successfully');
+
+      // Reset success state after 3 seconds
+      setTimeout(() => setExportSuccess(false), 3000);
+    } catch (error) {
+      console.error('CSV export failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      showErrorToast('Export failed', `Failed to export CSV: ${errorMessage}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Calculate date range duration
@@ -156,6 +188,42 @@ const ResultSummary: React.FC<ResultSummaryProps> = ({ summary, className = '' }
 
   return (
     <div className={`result-summary ${className}`}>
+      {/* Header with Download Button */}
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-semibold text-neutral-900">
+          Performance Summary
+        </h2>
+
+        <button
+          onClick={handleCsvExport}
+          disabled={isExporting}
+          className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md transition-all duration-200 ${
+            exportSuccess
+              ? 'text-success-700 bg-success-50 border-success-200'
+              : isExporting
+              ? 'text-neutral-500 bg-neutral-100 border-neutral-200 cursor-not-allowed'
+              : 'text-neutral-700 bg-white border-neutral-300 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+          }`}
+        >
+          {exportSuccess ? (
+            <>
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Downloaded!
+            </>
+          ) : isExporting ? (
+            <>
+              <div className="w-4 h-4 mr-2 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </>
+          )}
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Strategy Card */}
         <SummaryCard

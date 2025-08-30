@@ -25,7 +25,7 @@ export interface BacktestSummary {
 }
 
 // For compatibility with existing components
-export interface BacktestResult extends BacktestSummary {
+export interface BacktestResult extends Omit<BacktestSummary, 'equity_curve'> {
   run_id: string;
   strategy_id: string;
   execution_info: ExecutionInfo;
@@ -157,12 +157,12 @@ export interface BacktestParams {
 
 // Strategy options for the UI
 export const STRATEGY_OPTIONS = [
-  { value: 'PMCC', label: 'Poor Man\'s Covered Call' },
-  { value: 'Wheel', label: 'The Wheel Strategy' },
-  { value: 'CoveredCall', label: 'Covered Call' },
-  { value: 'iron_condor', label: 'Iron Condor' },
-  { value: 'bull_put_spread', label: 'Bull Put Spread' }
-] as const;
+  { value: 'PMCC' as const, label: 'Poor Man\'s Covered Call' },
+  { value: 'Wheel' as const, label: 'The Wheel Strategy' },
+  { value: 'CoveredCall' as const, label: 'Covered Call' },
+  { value: 'iron_condor' as const, label: 'Iron Condor' },
+  { value: 'bull_put_spread' as const, label: 'Bull Put Spread' }
+];
 
 export type StrategyType = typeof STRATEGY_OPTIONS[number]['value'];
 

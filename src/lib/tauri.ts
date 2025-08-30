@@ -1,4 +1,22 @@
-import { invoke } from '@tauri-apps/api/core'; // v2 import ONLY
+/**
+ * Centralized Tauri API Imports
+ *
+ * This module serves as the single source of truth for all Tauri API imports.
+ * All components should import Tauri functionality from this module instead
+ * of directly from @tauri-apps/api/* packages.
+ *
+ * This ensures:
+ * - Consistent API usage across the application
+ * - Easy migration between Tauri versions
+ * - Centralized error handling and utilities
+ * - Prevention of direct Tauri API usage (enforced by ESLint)
+ */
+
+// Core Tauri v2 imports - ONLY place in codebase that should import directly
+import { invoke } from '@tauri-apps/api/core';
+
+// Re-export core functionality for application use
+export { invoke };
 
 export type TauriErrorType = 'timeout' | 'backend' | 'network' | 'unknown';
 
@@ -86,6 +104,12 @@ export const TauriUtils = {
 import type { BacktestSummary } from '../types/backtest';
 
 export const TauriAPI = {
+  async ping(): Promise<{ ok: boolean; ts: number }> {
+    const op = 'Backend ping';
+    const promise = invoke<{ ok: boolean; ts: number }>('ping');
+    return withTimeout(promise, 2000, op);
+  },
+
   async getSampleBacktestResult(delayMs = 8000): Promise<BacktestSummary> {
     const op = 'Sample data loading';
     // NOTE: use delay_ms here to match the Rust fn signature

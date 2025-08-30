@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core'; // v2 import
+import { invoke } from './lib/tauri';
 
 type State = 'loading' | 'up' | 'down';
 
@@ -15,10 +15,16 @@ export default function BootGate({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await invoke<string>('ping');
+        const res = await invoke<any>('ping');
+        console.log('Ping response:', res, typeof res);
         clearTimeout(t);
-        setState(res === 'ok' ? 'up' : 'down');
-        if (res !== 'ok') setErr(`Unexpected ping result: ${String(res)}`);
+
+        // Handle both string and object responses
+        const responseText = typeof res === 'string' ? res : JSON.stringify(res);
+        const isSuccess = responseText.includes('pong') || responseText.includes('ok');
+
+        setState(isSuccess ? 'up' : 'down');
+        if (!isSuccess) setErr(`Unexpected ping result: ${responseText}`);
       } catch (e: any) {
         clearTimeout(t);
         setState('down');
@@ -32,23 +38,33 @@ export default function BootGate({ children }: { children: React.ReactNode }) {
 
   if (state === 'loading') {
     return (
-      <div style={{display:'grid',placeItems:'center',height:'100vh',fontFamily:'system-ui'}}>
-        <div>Starting backend…</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Connecting to backend...</p>
+        </div>
       </div>
     );
   }
+
   if (state === 'down') {
     return (
-      <div style={{padding:20,fontFamily:'system-ui'}}>
-        <h2>Backend not reachable</h2>
-        <pre style={{whiteSpace:'pre-wrap',color:'#b00'}}>{err}</pre>
-        <ol>
-          <li>Confirm import: <code>import &#123; invoke &#125; from '@tauri-apps/api/core'</code></li>
-          <li>Make sure <code>ping</code> is registered in <code>main.rs</code> (see below).</li>
-          <li>Ctrl+Shift+I in the Tauri window → check Console for the exact error.</li>
-        </ol>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Backend Unavailable</h1>
+          <p className="text-gray-600 mb-4">Unable to connect to the trading engine backend.</p>
+          <p className="text-sm text-gray-500">{err}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
+
   return <>{children}</>;
 }
