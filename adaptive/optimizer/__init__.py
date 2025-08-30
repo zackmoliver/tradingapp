@@ -62,4 +62,9 @@ class BaseOptimizer:
         # TODO: Implement constraint validation
         return True
 
-__all__ = ["BaseOptimizer"]
+try:
+    from .bayesian_optimizer import BayesianOptimizer
+    __all__ = ["BaseOptimizer", "BayesianOptimizer"]
+except ImportError:
+    # BayesianOptimizer requires scikit-learn
+    __all__ = ["BaseOptimizer"]

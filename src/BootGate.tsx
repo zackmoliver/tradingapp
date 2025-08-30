@@ -1,42 +1,73 @@
-import { useEffect, useState } from 'react';
-import { invoke } from './lib/tauri';
+import { useEffect, useState } from "react";
 
-type State = 'loading' | 'up' | 'down';
+type State = "loading" | "up" | "down" | "desktop-only" | "error";
+
+function isTauri(): boolean {
+  const w = window as any;
+  return (
+    typeof window !== "undefined" &&
+    (!!w.__TAURI__ || !!w.__TAURI_INTERNALS__ || navigator.userAgent.includes("Tauri"))
+  );
+}
+
+const DEV_BYPASS =
+  import.meta.env.MODE === "development" &&
+  String(import.meta.env.VITE_ALLOW_WEB ?? "") === "1";
 
 export default function BootGate({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<State>('loading');
-  const [err, setErr] = useState<string>('');
+  const [state, setState] = useState<State>("loading");
+  const [err, setErr] = useState<string>("");
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setState('down');
-      setErr('Timeout: backend did not respond within 5s.');
-    }, 5000);
+    // Allow pure web preview if explicitly enabled
+    if (!isTauri() && DEV_BYPASS) {
+      console.warn("[BootGate] Dev bypass enabled (web-only mode).");
+      setState("up");
+      return;
+    }
+
+    // Desktop required beyond this point
+    if (!isTauri()) {
+      setState("desktop-only");
+      setErr("Tauri desktop environment not detected. Please run: npm run tauri:dev");
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setState("down");
+      setErr("Timeout: backend did not respond within 12s.");
+    }, 12_000);
 
     (async () => {
       try {
-        const res = await invoke<any>('ping');
-        console.log('Ping response:', res, typeof res);
-        clearTimeout(t);
+        // Tauri v2 import
+        const { invoke } = await import("@tauri-apps/api/core");
+        const res = await invoke<any>("ping"); // must exist on the Rust side
+        clearTimeout(timeout);
 
-        // Handle both string and object responses
-        const responseText = typeof res === 'string' ? res : JSON.stringify(res);
-        const isSuccess = responseText.includes('pong') || responseText.includes('ok');
-
-        setState(isSuccess ? 'up' : 'down');
-        if (!isSuccess) setErr(`Unexpected ping result: ${responseText}`);
+        const txt = typeof res === "string" ? res : JSON.stringify(res);
+        const ok = txt.toLowerCase().includes("pong") || txt.toLowerCase().includes("ok");
+        setState(ok ? "up" : "down");
+        if (!ok) setErr(`Unexpected ping result: ${txt}`);
       } catch (e: any) {
-        clearTimeout(t);
-        setState('down');
-        setErr(e?.message ?? String(e));
-        console.error('[BootGate] invoke("ping") failed:', e);
+        clearTimeout(timeout);
+        const msg = e?.message ?? String(e);
+        // Common: "unknown api command ping" if not registered yet
+        if (msg.toLowerCase().includes("unknown") && msg.toLowerCase().includes("ping")) {
+          setState("down");
+          setErr('Ping command is not registered in Tauri. Add #[tauri::command] fn ping() and register it.');
+        } else {
+          setState("error");
+          setErr(msg);
+        }
+        console.error("[BootGate] invoke('ping') failed:", e);
       }
     })();
 
-    return () => clearTimeout(t);
+    return () => clearTimeout(timeout);
   }, []);
 
-  if (state === 'loading') {
+  if (state === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -47,13 +78,34 @@ export default function BootGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (state === 'down') {
+  if (state === "desktop-only") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="text-yellow-500 text-6xl mb-4">💻</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Desktop App Required</h1>
+          <p className="text-gray-600 mb-4">{err}</p>
+          <p className="text-sm text-gray-500">
+            Please run this application using the desktop version for full functionality.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state === "down" || state === "error") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center max-w-md">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Backend Unavailable</h1>
-          <p className="text-gray-600 mb-4">Unable to connect to the trading engine backend.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {state === "down" ? "Backend Unavailable" : "Connection Error"}
+          </h1>
+          <p className="text-gray-600 mb-4">
+            {state === "down"
+              ? "Unable to connect to the trading engine backend."
+              : "An error occurred while connecting to the backend."}
+          </p>
           <p className="text-sm text-gray-500">{err}</p>
           <button
             onClick={() => window.location.reload()}

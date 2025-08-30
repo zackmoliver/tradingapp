@@ -3,7 +3,8 @@ import "./App.css";
 
 import Backtest from "./pages/Backtest";
 import Analyzer from "./pages/Analyzer";
-import TradeFinder from "./pages/TradeFinder";
+import { TradeFinderPage } from "./pages/TradeFinderPage";
+import { Settings } from "./pages/Settings";
 import HealthStatusBadge from "./components/HealthStatusBadge";
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
                 <Tab to="/backtest" label="Backtest" />
                 <Tab to="/analyzer" label="Analyzer" />
                 <Tab to="/trade-finder" label="Trade Finder" />
+                <Tab to="/settings" label="Settings" />
               </nav>
 
               {/* Health Status Badge */}
@@ -48,7 +50,8 @@ export default function App() {
             <Route path="/" element={<Backtest />} />
             <Route path="/backtest" element={<Backtest />} />
             <Route path="/analyzer" element={<Analyzer />} />
-            <Route path="/trade-finder" element={<TradeFinder />} />
+            <Route path="/trade-finder" element={<TradeFinderPage />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
       </main>

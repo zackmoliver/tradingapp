@@ -613,3 +613,134 @@ def mock_external_apis(monkeypatch):
         'market_data': mock_market_data_api,
         'options_data': mock_options_data_api
     }
+
+
+# =============================================================================
+# Bayesian Optimizer Fixtures
+# =============================================================================
+
+@pytest.fixture
+def mock_runs_directory(tmp_path, seeded_random):
+    """Create mock runs directory with realistic backtest data for optimizer testing"""
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+
+    # Create iron_condor backtest results with parameter-performance relationships
+    for i in range(10):
+        run_dir = runs_dir / f"iron_condor_run_{i:03d}"
+        run_dir.mkdir()
+
+        # Generate parameters with realistic relationships
+        strike_delta = 0.20 + (i * 0.01)  # 0.20 to 0.29
+        days_to_expiry = 35 + i  # 35 to 44
+        profit_target = 0.4 + (i * 0.02)  # 0.4 to 0.58
+
+        # Performance based on distance from "optimal" parameters
+        optimal_delta = 0.25
+        optimal_dte = 40
+        optimal_target = 0.5
+
+        # Calculate performance factor (closer to optimal = better)
+        delta_factor = 1.0 - abs(strike_delta - optimal_delta) * 2
+        dte_factor = 1.0 - abs(days_to_expiry - optimal_dte) * 0.02
+        target_factor = 1.0 - abs(profit_target - optimal_target) * 0.5
+
+        performance_factor = (delta_factor + dte_factor + target_factor) / 3
+        base_sharpe = 1.2
+        sharpe_ratio = base_sharpe * performance_factor + seeded_random.normal(0, 0.1)
+
+        summary = {
+            "strategy_id": "iron_condor",
+            "run_id": f"run_{i:03d}",
+            "start_date": "2024-01-01",
+            "end_date": "2024-03-31",
+            "total_trades": 25 + i,
+            "winning_trades": int((25 + i) * (0.65 + performance_factor * 0.1)),
+            "win_rate": 0.65 + performance_factor * 0.1,
+            "total_pnl": 10000 + (performance_factor * 8000) + seeded_random.normal(0, 1000),
+            "sharpe_ratio": max(0.1, sharpe_ratio),
+            "max_drawdown": 0.12 - (performance_factor * 0.04),
+            "parameters": {
+                "strike_delta": round(strike_delta, 3),
+                "days_to_expiry": int(days_to_expiry),
+                "profit_target": round(profit_target, 3),
+                "stop_loss": 2.0,
+                "min_credit": 1.0
+            },
+            "performance_metrics": {
+                "total_return": max(0.0, performance_factor * 0.15),
+                "volatility": 0.15 - (performance_factor * 0.03)
+            },
+            "risk_metrics": {
+                "var_95": 0.05,
+                "expected_shortfall": 0.07
+            }
+        }
+
+        with open(run_dir / "summary.json", 'w') as f:
+            json.dump(summary, f, indent=2)
+
+    return runs_dir
+
+
+@pytest.fixture
+def bayesian_optimizer_with_data(test_version, mock_runs_directory, monkeypatch):
+    """Create BayesianOptimizer with mocked data directory"""
+    try:
+        from adaptive.optimizer.bayesian_optimizer import BayesianOptimizer
+    except ImportError:
+        pytest.skip("BayesianOptimizer requires scikit-learn")
+
+    # Mock the Path class to return our test directory
+    def mock_path(path_str):
+        if path_str == "runs":
+            return mock_runs_directory
+        return Path(path_str)
+
+    monkeypatch.setattr('adaptive.optimizer.bayesian_optimizer.Path', mock_path)
+
+    return BayesianOptimizer(
+        version=test_version,
+        min_samples_for_optimization=3,
+        acquisition_samples=50,  # Smaller for faster tests
+        exploration_weight=0.01
+    )
+
+
+@pytest.fixture
+def optimizer_parameter_bounds():
+    """Standard parameter bounds for optimizer testing"""
+    return {
+        'strike_delta': (0.15, 0.35),
+        'days_to_expiry': (30, 60),
+        'profit_target': (0.25, 0.75),
+        'stop_loss': (1.5, 3.0),
+        'min_credit': (0.5, 2.0)
+    }
+
+
+@pytest.fixture
+def insufficient_backtest_data(tmp_path):
+    """Create directory with insufficient backtest data for safe-mode testing"""
+    runs_dir = tmp_path / "runs_insufficient"
+    runs_dir.mkdir()
+
+    # Create only 2 runs (below minimum threshold)
+    for i in range(2):
+        run_dir = runs_dir / f"iron_condor_run_{i:03d}"
+        run_dir.mkdir()
+
+        summary = {
+            "strategy_id": "iron_condor",
+            "run_id": f"run_{i:03d}",
+            "sharpe_ratio": 1.0 + (i * 0.2),
+            "parameters": {
+                "strike_delta": 0.25,
+                "days_to_expiry": 45
+            }
+        }
+
+        with open(run_dir / "summary.json", 'w') as f:
+            json.dump(summary, f, indent=2)
+
+    return runs_dir

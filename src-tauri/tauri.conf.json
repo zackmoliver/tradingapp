@@ -3,12 +3,13 @@
   "productName": "trading-app",
   "version": "0.1.0",
   "identifier": "com.tradingapp.dev",
+
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "vite --port 8080 --strictPort",
     "devUrl": "http://localhost:8080",
     "frontendDist": "../dist"
   },
+
   "app": {
     "security": {
       "csp": null,
@@ -18,27 +19,24 @@
           "description": "Main application capabilities",
           "windows": ["main"],
           "permissions": [
-            {
-              "identifier": "core:default"
-            },
-            {
-              "identifier": "core:path:default"
-            }
+            { "identifier": "core:default" },
+            { "identifier": "core:path:default" }
           ]
         }
       ]
     },
     "windows": [
       {
+        "label": "main",
         "title": "Trading App",
         "width": 1200,
         "height": 800,
         "resizable": true,
-        "fullscreen": false,
-        "label": "main"
+        "fullscreen": false
       }
     ]
   },
+
   "bundle": {
     "active": true,
     "targets": "all",

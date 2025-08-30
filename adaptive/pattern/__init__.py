@@ -277,8 +277,18 @@ class TechnicalPatternDetector(PatternRecognizer):
         
         return self._detect_pattern(pattern_name, data['close'])
 
-__all__ = [
-    "PatternRecognizer",
-    "RegimeDetector", 
-    "TechnicalPatternDetector"
-]
+try:
+    from .autoencoder import AutoencoderAnomalyDetector
+    __all__ = [
+        "PatternRecognizer",
+        "RegimeDetector",
+        "TechnicalPatternDetector",
+        "AutoencoderAnomalyDetector"
+    ]
+except ImportError:
+    # AutoencoderAnomalyDetector requires PyTorch
+    __all__ = [
+        "PatternRecognizer",
+        "RegimeDetector",
+        "TechnicalPatternDetector"
+    ]

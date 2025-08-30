@@ -1,147 +1,225 @@
 """
-Reinforcement Learning Module for Options Trading
+Reinforcement Learning Module for Adaptive Trading
 
-This module implements reinforcement learning agents and environments for
-adaptive options trading strategy selection and parameter adjustment.
+This module provides reinforcement learning components for adaptive trading
+strategy allocation and portfolio management.
 
-Components:
-- agents: RL agents (DQN, PPO, A3C, etc.)
-- environments: Trading environments for RL training
-- rewards: Reward function definitions
-- policies: Trading policy implementations
-- training: Training loops and utilities
+Features:
+- Deep Q-Network (DQN) agents for strategy allocation
+- Trading environments for RL training
+- Reward functions for portfolio optimization
+- Experience replay and exploration strategies
 """
 
-from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
-from ..types import MarketState, StrategyAllocation, AdaptiveVersion
+import pandas as pd
+from abc import ABC, abstractmethod
+from typing import Dict, List, Any, Optional, Tuple, Union
+from datetime import datetime
+import logging
 
-__version__ = "1.0.0"
+from ..types import AdaptiveVersion, MarketState, StrategyAllocation
 
-class TradingEnvironment:
-    """Base class for options trading RL environments"""
-    
+class BaseAgent(ABC):
+    """
+    Abstract base class for reinforcement learning agents.
+
+    This class defines the interface that all RL agents must implement
+    for strategy allocation and portfolio management.
+    """
+
     def __init__(self, version: Optional[AdaptiveVersion] = None):
-        self.version = version or AdaptiveVersion()
-        self.state_space_dim = 0
-        self.action_space_dim = 0
-        self.current_state = None
-        self.episode_step = 0
-        self.max_episode_steps = 1000
-    
-    def reset(self) -> np.ndarray:
-        """Reset environment to initial state"""
-        self.episode_step = 0
-        self.current_state = self._get_initial_state()
-        return self._state_to_observation(self.current_state)
-    
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         """
-        Execute action in environment.
-        
+        Initialize base agent.
+
+        Args:
+            version: Version tracking information
+        """
+        self.version = version or AdaptiveVersion()
+        self.is_trained = False
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @abstractmethod
+    def get_strategy_allocation(self,
+                              market_state: MarketState,
+                              total_capital: float = 100000.0) -> StrategyAllocation:
+        """
+        Get strategy allocation based on current market state.
+
+        Args:
+            market_state: Current market state
+            total_capital: Total capital to allocate
+
+        Returns:
+            StrategyAllocation with recommended allocations
+        """
+        pass
+
+    @abstractmethod
+    def select_action(self, state: np.ndarray, training: bool = True) -> int:
+        """
+        Select action based on current state.
+
+        Args:
+            state: Current state representation
+            training: Whether in training mode
+
+        Returns:
+            Selected action index
+        """
+        pass
+
+    def train_step(self,
+                   state: np.ndarray,
+                   action: int,
+                   reward: float,
+                   next_state: np.ndarray,
+                   done: bool) -> Dict[str, float]:
+        """
+        Perform one training step (optional for some agents).
+
+        Args:
+            state: Current state
+            action: Action taken
+            reward: Reward received
+            next_state: Next state
+            done: Whether episode is done
+
+        Returns:
+            Training metrics
+        """
+        return {}
+
+    def update_reward(self, reward: float) -> None:
+        """Update reward tracking (optional)"""
+        pass
+
+    def end_episode(self) -> float:
+        """End current episode and return total reward (optional)"""
+        return 0.0
+
+
+class TradingEnvironment(ABC):
+    """
+    Abstract base class for trading environments.
+
+    This class defines the interface for trading environments used
+    to train reinforcement learning agents.
+    """
+
+    def __init__(self,
+                 version: Optional[AdaptiveVersion] = None,
+                 initial_capital: float = 100000.0):
+        """
+        Initialize trading environment.
+
+        Args:
+            version: Version tracking information
+            initial_capital: Initial capital for trading
+        """
+        self.version = version or AdaptiveVersion()
+        self.initial_capital = initial_capital
+        self.current_capital = initial_capital
+        self.current_step = 0
+        self.done = False
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @abstractmethod
+    def reset(self) -> np.ndarray:
+        """
+        Reset environment to initial state.
+
+        Returns:
+            Initial state observation
+        """
+        pass
+
+    @abstractmethod
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        """
+        Execute one step in the environment.
+
         Args:
             action: Action to execute
-            
+
         Returns:
-            Tuple of (observation, reward, done, info)
+            Tuple of (next_state, reward, done, info)
         """
-        raise NotImplementedError("Subclasses must implement step method")
-    
-    def _get_initial_state(self) -> MarketState:
-        """Get initial market state"""
-        raise NotImplementedError("Subclasses must implement _get_initial_state method")
-    
-    def _state_to_observation(self, state: MarketState) -> np.ndarray:
-        """Convert market state to observation vector"""
-        features = state.to_feature_vector()
-        return np.array(list(features.values()), dtype=np.float32)
-    
-    def _calculate_reward(self, 
-                         action: np.ndarray, 
-                         old_state: MarketState, 
-                         new_state: MarketState,
-                         portfolio_return: float) -> float:
-        """Calculate reward for the given action and state transition"""
-        # Base reward is portfolio return
-        reward = portfolio_return
-        
-        # Add risk-adjusted components
-        # TODO: Implement sophisticated reward shaping
-        
-        return reward
+        pass
 
-class BaseAgent:
-    """Base class for RL agents"""
-    
-    def __init__(self, 
-                 state_dim: int, 
-                 action_dim: int,
-                 version: Optional[AdaptiveVersion] = None):
-        self.state_dim = state_dim
-        self.action_dim = action_dim
+    @abstractmethod
+    def get_state(self) -> np.ndarray:
+        """
+        Get current state representation.
+
+        Returns:
+            Current state as numpy array
+        """
+        pass
+
+    def get_info(self) -> Dict[str, Any]:
+        """Get additional environment information"""
+        return {
+            'current_capital': self.current_capital,
+            'current_step': self.current_step,
+            'total_return': (self.current_capital - self.initial_capital) / self.initial_capital
+        }
+
+
+class RewardFunction(ABC):
+    """
+    Abstract base class for reward functions.
+
+    This class defines the interface for reward functions used
+    to evaluate agent performance in trading environments.
+    """
+
+    def __init__(self, version: Optional[AdaptiveVersion] = None):
+        """
+        Initialize reward function.
+
+        Args:
+            version: Version tracking information
+        """
         self.version = version or AdaptiveVersion()
-        self.training_step = 0
-    
-    def select_action(self, state: np.ndarray, training: bool = False) -> np.ndarray:
-        """Select action given current state"""
-        raise NotImplementedError("Subclasses must implement select_action method")
-    
-    def update(self, 
-               state: np.ndarray, 
-               action: np.ndarray, 
-               reward: float, 
-               next_state: np.ndarray, 
-               done: bool) -> Dict[str, float]:
-        """Update agent with experience tuple"""
-        raise NotImplementedError("Subclasses must implement update method")
-    
-    def save_model(self, filepath: str) -> None:
-        """Save agent model to file"""
-        raise NotImplementedError("Subclasses must implement save_model method")
-    
-    def load_model(self, filepath: str) -> None:
-        """Load agent model from file"""
-        raise NotImplementedError("Subclasses must implement load_model method")
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-class RewardFunction:
-    """Configurable reward function for trading environments"""
-    
-    def __init__(self, 
-                 return_weight: float = 1.0,
-                 risk_weight: float = 0.5,
-                 drawdown_penalty: float = 2.0,
-                 transaction_cost: float = 0.001):
-        self.return_weight = return_weight
-        self.risk_weight = risk_weight
-        self.drawdown_penalty = drawdown_penalty
-        self.transaction_cost = transaction_cost
-    
-    def calculate(self, 
-                  portfolio_return: float,
-                  portfolio_volatility: float,
-                  drawdown: float,
-                  transaction_volume: float) -> float:
-        """Calculate reward based on multiple factors"""
-        
-        # Base return component
-        reward = self.return_weight * portfolio_return
-        
-        # Risk adjustment
-        if portfolio_volatility > 0:
-            sharpe_component = portfolio_return / portfolio_volatility
-            reward += self.risk_weight * sharpe_component
-        
-        # Drawdown penalty
-        if drawdown < 0:
-            reward += self.drawdown_penalty * drawdown
-        
-        # Transaction costs
-        reward -= self.transaction_cost * transaction_volume
-        
-        return reward
+    @abstractmethod
+    def calculate_reward(self,
+                        previous_portfolio_value: float,
+                        current_portfolio_value: float,
+                        action: int,
+                        market_state: MarketState,
+                        additional_info: Optional[Dict[str, Any]] = None) -> float:
+        """
+        Calculate reward for a trading action.
 
-__all__ = [
-    "TradingEnvironment",
-    "BaseAgent", 
-    "RewardFunction"
-]
+        Args:
+            previous_portfolio_value: Portfolio value before action
+            current_portfolio_value: Portfolio value after action
+            action: Action taken
+            market_state: Current market state
+            additional_info: Additional information for reward calculation
+
+        Returns:
+            Calculated reward value
+        """
+        pass
+
+
+# Import DQNAgent with graceful fallback
+try:
+    from .agent import DQNAgent
+    __all__ = [
+        "BaseAgent",
+        "TradingEnvironment",
+        "RewardFunction",
+        "DQNAgent"
+    ]
+except ImportError:
+    # DQNAgent requires PyTorch
+    __all__ = [
+        "BaseAgent",
+        "TradingEnvironment",
+        "RewardFunction"
+    ]

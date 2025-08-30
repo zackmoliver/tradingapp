@@ -157,11 +157,11 @@ export interface BacktestParams {
 
 // Strategy options for the UI
 export const STRATEGY_OPTIONS = [
-  { value: 'PMCC' as const, label: 'Poor Man\'s Covered Call' },
-  { value: 'Wheel' as const, label: 'The Wheel Strategy' },
-  { value: 'CoveredCall' as const, label: 'Covered Call' },
-  { value: 'iron_condor' as const, label: 'Iron Condor' },
-  { value: 'bull_put_spread' as const, label: 'Bull Put Spread' }
+  { value: 'PMCC' as const,        label: "Poor Man's Covered Call" },
+  { value: 'Wheel' as const,       label: "The Wheel Strategy" },
+  { value: 'CoveredCall' as const, label: "Covered Call" },
+  { value: 'iron_condor' as const, label: "Iron Condor" },
+  { value: 'bull_put_spread' as const, label: "Bull Put Spread" },
 ];
 
 export type StrategyType = typeof STRATEGY_OPTIONS[number]['value'];
@@ -203,4 +203,24 @@ export interface AsyncState<T> {
   data: T | null;
   loading: LoadingState;
   error: string | null;
+}
+
+// Trade Finder types
+export interface TradeResult {
+  date: string;
+  symbol: string;
+  strategy: string;
+  entry: number;
+  exit: number;
+  pl: number;
+  win: boolean;
+}
+
+export interface TradeFilters {
+  symbol?: string;
+  startDate?: string;
+  endDate?: string;
+  strategy?: string;
+  minWinRate?: number;
+  maxDrawdown?: number;
 }
