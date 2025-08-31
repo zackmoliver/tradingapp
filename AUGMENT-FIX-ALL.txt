@@ -1,0 +1,330 @@
+Awesome—here’s a **bulletproof, copy-paste prompt** tuned for Augment so it can fix everything cleanly and predictably. I’ve optimized it for your exact stack and the issues you’ve been hitting.
+
+---
+
+## 🚀 Copy-paste into Augment
+
+````
+# 🔧 COMPREHENSIVE FIX + HARDENING REQUEST (Tauri v2 + React + TS)
+
+## PROJECT SNAPSHOT
+STACK: Tauri v2, Rust, React 18, TypeScript, Vite, Tailwind, Recharts, date-fns
+PORTS: Vite on 8080 (dev only)
+IMPORTS: Use `@tauri-apps/api/core` for `invoke` (NEVER `@tauri-apps/api/tauri`)
+DATE FORMAT: MM/DD/YYYY everywhere (UI, payloads, CSV)
+STATE RULE: Every async action must show loading + error (no silent hangs)
+NO NEW DEPS unless explicitly justified with a brief note and exact file changes
+
+---
+
+## GOALS (DO ALL)
+1) **Fix all compile/runtime/build errors** across Rust + TS/React + config.
+2) **Unify dates** end-to-end (MM/DD/YYYY) and eliminate `NaN` axis ticks.
+3) **Kill router warnings** by ensuring there is exactly one Router (HashRouter preferred).
+4) **Standardize utilities** (`src/lib/tauri.ts`, `src/lib/date.ts`) and replace ad-hoc imports.
+5) **Align Tauri v2** config + Cargo versions; remove any v1 artifacts.
+6) **Add guardrails** (lint rules, preflight checks, 1-minute runbook).
+
+---
+
+## CURRENT FILES (assume these exist; fix or create as needed)
+- `package.json`
+- `src-tauri/tauri.conf.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/src/main.rs`
+- `src/main.tsx`
+- `src/App.tsx`
+- `src/components/AdaptivePanel.tsx`
+- (CREATE) `src/lib/tauri.ts` — centralized `invoke`
+- (CREATE) `src/lib/date.ts` — parse/format helpers
+
+---
+
+## REQUIRED API & TYPES (treat as truth)
+TS:
+```ts
+export interface BacktestPoint { t: string; equity: number; drawdown: number; } // t: MM/DD/YYYY
+export interface BacktestSummary {
+  strategy: string; symbol: string; start: string; end: string; capital: number;
+  cagr: number; trades: number; win_rate: number; max_dd: number; // 0..1
+  equity_curve: BacktestPoint[];
+}
+````
+
+RUST COMMANDS (JSON must match TS shapes above):
+
+```rust
+#[tauri::command] async fn ping() -> serde_json::Value               // { ok: true, ts }
+#[tauri::command] async fn get_sample_backtest_result(delay_ms: Option<u64>) -> BacktestSummary
+#[tauri::command] async fn run_backtest(params: BacktestParams, delay_ms: Option<u64>) -> BacktestSummary
+#[tauri::command] async fn load_preferences(app: tauri::AppHandle) -> Result<Option<BacktestParams>, String>
+#[tauri::command] async fn save_preferences(app: tauri::AppHandle, preferences: BacktestParams) -> Result<(), String>
+```
+
+---
+
+## FIX LIST (what to change)
+
+### A) CONFIG & TOOLING (TAURI v2, PORT 8080)
+
+* `package.json` → `"dev": "vite --port 8080"` (no trailing commas)
+* `src-tauri/tauri.conf.json` → `"devUrl": "http://localhost:8080"`, `"beforeDevCommand": "npm run dev"`, `"frontendDist": "../dist"`, JSON valid UTF-8 (no BOM)
+* `src-tauri/Cargo.toml` →
+
+  ```
+  [build-dependencies]
+  tauri-build = { version = "2.4.0", features = [] }
+
+  [dependencies]
+  tauri = { version = "2.4.0", features = [] }
+  serde = { version = "1.0", features = ["derive"] }
+  serde_json = "1.0"
+  chrono = "0.4"
+  ```
+* Remove any `plugins` blocks unless you also add correct crates/init; otherwise leave plugins out for now.
+
+### B) ROUTER (ONE Router ONLY)
+
+* `src/main.tsx` should wrap `<App />` with a single `HashRouter`.
+* `src/App.tsx` should NOT create another Router—only `Routes`/`Route` inside.
+
+### C) CENTRALIZED HELPERS (CREATE/REFRESH)
+
+* `src/lib/tauri.ts`:
+
+  ```ts
+  import { invoke } from "@tauri-apps/api/core";
+  export { invoke };
+  export const isTauri = () => typeof window !== "undefined" && "__TAURI_IPC__" in window;
+  ```
+* `src/lib/date.ts`:
+
+  ```ts
+  import { parse, format } from "date-fns";
+  export const parseMMDDYYYY = (s: string) => parse(s, "MM/dd/yyyy", new Date());
+  export const toMMDDYYYY   = (d: Date)    => format(d, "MM/dd/yyyy");
+  export const toPct = (n: number, dp = 2) => `${(n * 100).toFixed(dp)}%`;
+  export const toMoney = (n: number)       => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  ```
+
+### D) CHARTS & DATES (NO NaN)
+
+* On fetch, convert `BacktestSummary.equity_curve[].t` (string) → `Date` once in state.
+* Recharts XAxis uses the Date value; `tickFormatter` uses `toMMDDYYYY`.
+* All % fields in UI use `toPct`.
+
+### E) ADAPTIVE PANEL IMPORTS
+
+* `src/components/AdaptivePanel.tsx` must import from `"../lib/tauri"` and `"../lib/date"` (fix any missing imports).
+
+### F) RUST SHAPE & ECHOED DATES
+
+* Ensure Rust echoes `start`/`end` in **MM/DD/YYYY** exactly as requested by the form.
+* Ensure `equity_curve.t` values are also MM/DD/YYYY (no “Day 1” placeholders).
+
+---
+
+## DELIVERABLES (NON-NEGOTIABLE)
+
+1. **Change list**: every file touched (path + short summary)
+2. **Full file contents** for each changed/created file (no ellipses)
+3. **Unified diff** (optional but preferred)
+4. **Compatibility report**:
+
+   * Confirm Rust JSON ⇄ TS types match exactly
+   * Note any deviations, why, and where handled
+5. **Prevention**:
+
+   * Add an ESLint rule (or simple grep step) that forbids `@tauri-apps/api/tauri`
+   * Ensure all date formatting goes through `src/lib/date.ts`
+6. **1-minute runbook** (PowerShell):
+
+   * JSON checks:
+
+     ```powershell
+     node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'));console.log('package.json ok')"
+     node -e "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8'));console.log('tauri.conf.json ok')"
+     ```
+   * Type checks:
+
+     ```powershell
+     tsc --noEmit
+     cd src-tauri; cargo check; cd ..
+     ```
+   * Free ports:
+
+     ```powershell
+     $p=Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue; if($p){Stop-Process -Id $p.OwningProcess -Force}
+     ```
+   * Run:
+
+     ```powershell
+     npx @tauri-apps/cli@latest dev
+     ```
+
+---
+
+## ACCEPTANCE CRITERIA
+
+* `tsc --noEmit` passes and `cargo check` passes.
+* `npx @tauri-apps/cli@latest dev` launches; Vite serves on **8080**; window opens.
+* No Router nesting warnings. No `NaN` ticks. Dates render as **MM/DD/YYYY** in cards, tooltips, CSV.
+* All `invoke` imports come from `src/lib/tauri.ts`. Grep shows **0** occurrences of `@tauri-apps/api/tauri`.
+* Error states render with a visible message + Retry (no infinite spinner).
+
+---
+
+## OPTIONAL NICE-TO-HAVE (only if time allows, do last)
+
+* Tiny `Tooltip` component for metric help (CAGR, Max DD, Win Rate, PMCC) — accessible (hover/focus/ESC), no layout shift.
+
+```
+
+---
+
+If you want, I can also give you a **Phase-2 prompt** (Sharpe/Sortino/Profit Factor + Trade Log + Benchmark) once this lands.
+::contentReference[oaicite:0]{index=0}
+```
+
+Short answer: **yes**, that prompt will still work—but you should add a tiny “delta” to cover the new things we’ve layered on (QA mode, caching, Polygon/news commands, and a couple naming mismatches). Below is a **copy-paste update** you can append to your existing prompt so Augment fixes everything end-to-end.
+
+---
+
+# 🔁 Delta: Updates since last prompt
+
+## New goals to include
+
+* **QA Mode must work**: overlay toggles, `runAll` runs, **Copy JSON Report** works.
+* **No missing commands**: eliminate “Command … not found” by wiring all used Tauri commands.
+* **Web-safe caching**: cache must not rely on Tauri FS in web context (use in-memory fallback).
+* **Real data fallback**: backtests must auto-fallback to sample data if “not enough bars”.
+
+## New/changed files (augment must create/fix)
+
+* `src/lib/qa.ts` (registry, suite factories, `runAll` + `getReport`)
+* `src/components/QAOverlay.tsx` (copy report button must work)
+* `src/hooks/useQAMode.ts`
+* `src/pages/QADemo.tsx` (null-safe; no hard dependency on specific QA shapes)
+* `src/lib/cache.ts` (**must** provide in-memory store when Tauri FS not available)
+* `src/lib/tauri.ts` (**export names that your code imports**; see below)
+* `src/pages/*` (BacktestPage, TradeFinderPage, Intelligence, Dashboard) register suites via `qaRegistry.registerSuite(...)`
+
+## Tauri/dev config (re-assert)
+
+* Dev port is **8080** everywhere:
+
+  * `package.json` → `"dev": "vite --port 8080"`
+  * `src-tauri/tauri.conf.json` → `"beforeDevCommand": "npm run dev", "devUrl": "http://localhost:8080", "frontendDist": "../dist"`
+
+## Required Tauri commands (no “command not found”)
+
+Augment must expose these in Rust and register with `invoke_handler`:
+
+* `ping`
+* `get_sample_backtest_result`
+* `run_backtest`
+* `fetch_polygon_bars` *(daily/1m; symbol, start, end)*
+* `suggest_and_analyze` *(server-side summary + recs)*
+* `fetch_news_sentiment` *(AAPL etc.)*
+
+(Types should match your TS interfaces; dates as **MM/DD/YYYY**.)
+
+## Web-safe cache requirement
+
+* If `isTauri() === false`, **do not** call Tauri FS—use an **in-memory Map**.
+* Provide uniform API: `get(key)`, `set(key, value, ttlMs?)`, `stats()`; calls should not throw in web mode.
+
+## Fix import naming (prevents current TS errors)
+
+Either change your imports everywhere to:
+
+```ts
+import { invoke, isTauri } from '@/lib/tauri';
+```
+
+**or** (easier) make `src/lib/tauri.ts` export the names your code already uses:
+
+```ts
+// src/lib/tauri.ts
+import { invoke as rawInvoke } from '@tauri-apps/api/core';
+
+export const isTauri = () =>
+  typeof window !== 'undefined' && '__TAURI_IPC__' in window;
+
+export const invoke = rawInvoke;
+
+// Backwards-compat shims so existing imports keep working:
+export const TauriAPI = {
+  invoke: rawInvoke,
+  ping: <T = any>() => rawInvoke<T>('ping'),
+  runBacktest: <T = any>(params: any) => rawInvoke<T>('run_backtest', { params }),
+  getSampleBacktestResult: <T = any>(delay_ms?: number) =>
+    rawInvoke<T>('get_sample_backtest_result', { delay_ms }),
+  fetchPolygonBars: <T = any>(args: any) => rawInvoke<T>('fetch_polygon_bars', args),
+  fetchNewsSentiment: <T = any>(args: any) => rawInvoke<T>('fetch_news_sentiment', args),
+  suggestAndAnalyze: <T = any>(args: any) => rawInvoke<T>('suggest_and_analyze', args),
+};
+
+export const TauriUtils = {
+  isTauri,
+  // minimal debounce for callers already using it
+  debounce<T extends (...a: any[]) => void>(fn: T, ms = 250) {
+    let t: any;
+    return (...args: Parameters<T>) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  },
+  generateSeed() {
+    return Math.floor(Math.random() * 1_000_000) >>> 0;
+  },
+};
+```
+
+## QA mode contract (so QADemo & overlay won’t crash)
+
+Augment must implement this minimal surface in `src/lib/qa.ts`:
+
+```ts
+export const qaRegistry = {
+  enable: () => void 0,
+  registerSuite: (suite: any) => {/* store it */},
+  async runAll() {
+    // run registered suites; return { summary, suites } with counts
+    return { summary: { totalSuites: n, passedSuites: p, failedSuites: f, totalChecks, passedChecks, failedChecks, duration }, suites: [...] };
+  },
+  getReport() { /* return last report */ }
+};
+
+export const testSuites = {
+  createBacktestSuite: () => ({ id: 'backtest', run: async () => ({ passed: x, failed: y }) }),
+  createIntelligenceSuite: () => ({ id: 'intelligence', run: async () => ({ /* … */ }) }),
+  createTradeFinderSuite: () => ({ id: 'tradefinder', run: async () => ({ /* … */ }) }),
+  createDashboardSuite: () => ({ id: 'dashboard', run: async () => ({ /* … */ }) }),
+  // optional factories — ok if omitted, callers must guard:
+  // createNewsBreadthSuite, createExportSuite
+};
+
+export const dataExposure = {
+  set: (k: string, v: any) => { (window as any).__qaData = { ...(window as any).__qaData, [k]: v }; },
+  get: (k: string) => (window as any).__qaData?.[k],
+};
+```
+
+## Acceptance criteria (additions)
+
+* QA: `Ctrl+Alt+Q` toggles overlay; `?qa=1` enables on load.
+* `window.__qa.runAll()` returns an object with **summary** and **suites**; **Copy JSON** copies it.
+* No more “Plugin not found” / `fs.exists not allowed` when dev-served (cache uses memory in web).
+* No more “Command … not found”.
+* If Polygon returns too few bars, UI shows a friendly message and auto-offers sample data.
+
+---
+
+### TL;DR
+
+* Your original prompt is still solid.
+* Paste the **Delta** above right under your existing prompt’s “GOALS”/“FILES” sections.
+* That gives Augment the exact spec to fix QA, caching, the new endpoints, and the naming mismatches in one pass.
+
+If you want, I can also give you a tiny **preflight script** (PowerShell) that asserts QA registry shape, cache behavior (web vs Tauri), and port config before you run `tauri dev`.

@@ -34,12 +34,12 @@ export const TradeTable: React.FC<TradeTableProps> = ({ trades, isLoading }) => 
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Trade Results</h2>
+        <div className="card-padding border-b border-gray-200 card-header-height flex items-center">
+          <h2 className="subsection-title">Trade Results</h2>
         </div>
-        <div className="p-8 text-center">
+        <div className="card-padding text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-2 text-sm text-gray-500">Loading trades...</p>
+          <p className="mt-4 caption-text">Loading trades...</p>
         </div>
       </div>
     );
@@ -48,10 +48,10 @@ export const TradeTable: React.FC<TradeTableProps> = ({ trades, isLoading }) => 
   if (trades.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Trade Results</h2>
+        <div className="card-padding border-b border-gray-200 card-header-height flex items-center">
+          <h2 className="subsection-title">Trade Results</h2>
         </div>
-        <div className="p-8 text-center">
+        <div className="card-padding text-center">
           <div className="mx-auto h-12 w-12 text-gray-400">
             <svg
               fill="none"
@@ -67,8 +67,8 @@ export const TradeTable: React.FC<TradeTableProps> = ({ trades, isLoading }) => 
               />
             </svg>
           </div>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No trades found</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <h3 className="mt-4 text-sm font-medium text-gray-900">No trades found</h3>
+          <p className="mt-2 caption-text">
             Try adjusting your filters to find matching trades.
           </p>
         </div>
@@ -78,8 +78,8 @@ export const TradeTable: React.FC<TradeTableProps> = ({ trades, isLoading }) => 
 
   return (
     <div className="bg-white rounded-lg shadow">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">
+      <div className="card-padding border-b border-gray-200 card-header-height flex items-center">
+        <h2 className="subsection-title">
           Trade Results ({trades.length} trades)
         </h2>
       </div>
@@ -180,20 +180,20 @@ export const TradeTable: React.FC<TradeTableProps> = ({ trades, isLoading }) => 
 
       {/* Summary Statistics */}
       {trades.length > 0 && (
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="card-padding bg-gray-50 border-t border-gray-200">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
             <div>
-              <span className="text-gray-500">Total Trades:</span>
+              <span className="caption-text">Total Trades:</span>
               <span className="ml-2 font-medium text-gray-900">{trades.length}</span>
             </div>
             <div>
-              <span className="text-gray-500">Win Rate:</span>
+              <span className="caption-text">Win Rate:</span>
               <span className="ml-2 font-medium text-gray-900">
                 {((trades.filter(t => t.win).length / trades.length) * 100).toFixed(1)}%
               </span>
             </div>
             <div>
-              <span className="text-gray-500">Total P&L:</span>
+              <span className="caption-text">Total P&L:</span>
               <span
                 className={`ml-2 font-medium ${
                   trades.reduce((sum, t) => sum + t.pl, 0) >= 0
@@ -205,7 +205,7 @@ export const TradeTable: React.FC<TradeTableProps> = ({ trades, isLoading }) => 
               </span>
             </div>
             <div>
-              <span className="text-gray-500">Avg P&L:</span>
+              <span className="caption-text">Avg P&L:</span>
               <span
                 className={`ml-2 font-medium ${
                   trades.reduce((sum, t) => sum + t.pl, 0) / trades.length >= 0

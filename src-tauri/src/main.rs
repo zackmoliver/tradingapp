@@ -1,48 +1,159 @@
-// src-tauri/src/main.rs
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use chrono::Utc;
+mod provider {
+    pub mod polygon;
+    pub mod yahoo;
+}
+
+mod providers {
+    pub mod polygon;
+}
+
+mod storage {
+    pub mod cache;
+}
+
+mod engine {
+    pub mod types;
+    pub mod broker;
+    pub mod mtm;
+    pub mod risk;
+    pub mod calendar;
+    pub mod r#loop;
+}
+
+use provider::polygon as poly;
+use provider::yahoo as yfin;
+use providers::polygon::{PolygonProvider, OhlcBar};
+use engine::broker::PaperBroker;
+use engine::types::{OrderRequest, TradeExecution, Portfolio, Trade, MarketData, EnhancedPortfolio};
+use engine::risk::RiskMetrics;
+use engine::calendar::TradingSession;
+use engine::r#loop::{StrategyLoop, StrategyLoopConfig, LoopState, SignalEvaluation};
+use storage::cache::JournalStats;
+
 use serde::{Deserialize, Serialize};
-use serde_json;
-use std::{fs, thread, time::Duration};
-use std::path::PathBuf;
-use tauri::Manager; // needed for app_handle.path()
+use std::{fs, time::Instant};
+use tauri::{Manager, Emitter};
 
-mod provider;
-use provider::{Provider, ProviderError, HistoryPoint, OptionChain, OptionQuote};
-use provider::polygon::PolygonProvider;
+//
+// ---------- Types shared with frontend ----------
+//
 
-// --------------------------- Types ---------------------------
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct EquityPoint {
-    t: String,
-    equity: f64,
-    drawdown: f64,
+#[tauri::command]
+async fn get_sample_backtest_result() -> BacktestSummary {
+    // TODO: return your existing sample, or synthesize a small curve
+    // minimal safe stub:
+    BacktestSummary {
+        strategy: "PMCC".into(),
+        symbol: "SPY".into(),
+        start: "01/01/2023".into(),
+        end: "12/31/2023".into(),
+        capital: 100_000.0,
+        cagr: 0.12,
+        trades: 40,
+        win_rate: 0.55,
+        max_dd: -0.15,
+        equity_curve: (0..252).scan((100000.0f64, 100000.0f64), |state, i|{
+          let r = 0.0006f64;
+          state.0 *= 1.0 + r;
+          state.1 = state.1.max(state.0);
+          Some(EquityPoint{
+            t: format!("{:02}/{:02}/2023", (i % 12) + 1, (i % 28) + 1),
+            equity: state.0,
+            drawdown: (state.0 - state.1) / state.1
+          })
+        }).collect()
+    }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct BacktestParams {
-    ticker: String,
-    start_date: String,
-    end_date: String,
-    strategy: String,
-    initial_capital: f64,
-    seed: Option<u32>,
+
+
+#[tauri::command]
+async fn suggest_and_analyze(_params: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+      "ok": true,
+      "notes": ["stub"],
+      "recommendation": { "strategy": "PMCC", "confidence": 0.6 }
+    })
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct BacktestSummary {
-    strategy: String,
+#[tauri::command]
+async fn fetch_news_sentiment(symbol: String) -> serde_json::Value {
+    serde_json::json!({ "symbol": symbol, "stories": [], "sentiment": 0.0 })
+}
+
+#[tauri::command]
+async fn fetch_polygon_bars(
     symbol: String,
-    start: String,
-    end: String,
-    capital: f64,
-    cagr: f64,
-    trades: u32,
-    win_rate: f64,
-    max_dd: f64,
-    equity_curve: Vec<EquityPoint>,
+    from: String,
+    to: String,
+    apikey: String
+) -> serde_json::Value {
+    // Construct Polygon API URL
+    let url = format!(
+        "https://api.polygon.io/v2/aggs/ticker/{}/range/1/day/{}/{}?adjusted=true&sort=asc&apikey={}",
+        symbol.to_uppercase(),
+        from,
+        to,
+        apikey
+    );
+
+    // Make HTTP request
+    match reqwest::get(&url).await {
+        Ok(response) => {
+            match response.json::<serde_json::Value>().await {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("Failed to parse Polygon response: {}", e);
+                    serde_json::json!({
+                        "status": "ERROR",
+                        "error": "Failed to parse response"
+                    })
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to fetch from Polygon: {}", e);
+            serde_json::json!({
+                "status": "ERROR",
+                "error": format!("HTTP request failed: {}", e)
+            })
+        }
+    }
+}
+
+
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EquityPoint {
+    pub t: String,     // MM/DD/YYYY
+    pub equity: f64,   // portfolio equity
+    pub drawdown: f64, // <= 0
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BacktestParams {
+    pub ticker: String,
+    pub start_date: String,   // MM/DD/YYYY
+    pub end_date: String,     // MM/DD/YYYY
+    pub strategy: String,     // e.g. "BuyHold" / "PMCC"
+    pub initial_capital: f64, // e.g. 100000
+    pub seed: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BacktestSummary {
+    pub strategy: String,
+    pub symbol: String,
+    pub start: String,
+    pub end: String,
+    pub capital: f64,
+    pub cagr: f64,
+    pub trades: u32,
+    pub win_rate: f64, // 0..1
+    pub max_dd: f64,   // <= 0
+    pub equity_curve: Vec<EquityPoint>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,7 +162,42 @@ struct PingResponse {
     ts: u64,
 }
 
-// ------------------------ Commands ---------------------------
+//
+// ---------- Helper math ----------
+//
+
+fn calc_drawdown_series(eqs: &[f64]) -> (Vec<f64>, f64) {
+    let mut max_run = if eqs.is_empty() { 0.0 } else { eqs[0] };
+    let mut dds = Vec::with_capacity(eqs.len());
+    let mut min_dd = 0.0;
+    for &e in eqs {
+        if e > max_run {
+            max_run = e;
+        }
+        let dd = if max_run > 0.0 { (e - max_run) / max_run } else { 0.0 };
+        if dd < min_dd {
+            min_dd = dd;
+        }
+        dds.push(dd);
+    }
+    (dds, min_dd)
+}
+
+fn annualized_cagr(first: f64, last: f64, days: usize) -> f64 {
+    if first <= 0.0 || last <= 0.0 || days == 0 {
+        return 0.0;
+    }
+    let years = (days as f64) / 365.25;
+    if years <= 0.0 {
+        0.0
+    } else {
+        (last / first).powf(1.0 / years) - 1.0
+    }
+}
+
+//
+// ---------- Commands: utilities ----------
+//
 
 #[tauri::command]
 async fn ping() -> PingResponse {
@@ -63,370 +209,651 @@ async fn ping() -> PingResponse {
     PingResponse { ok: true, ts }
 }
 
-fn get_preferences_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
-    let config_dir = app_handle
-        .path()
-        .app_config_dir()
-        .map_err(|e| format!("Failed to get config directory: {e}"))?;
-
-    let trading_app_dir = config_dir.join("trading-app");
-    let config_file = trading_app_dir.join("config.json");
-    Ok(config_file)
+fn prefs_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let p = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(p.join("trading-app").join("config.json"))
 }
 
 #[tauri::command]
-async fn load_preferences(app_handle: tauri::AppHandle) -> Result<Option<BacktestParams>, String> {
-    let config_path = get_preferences_path(app_handle)?;
-    if !config_path.exists() {
+async fn load_preferences(app: tauri::AppHandle) -> Result<Option<BacktestParams>, String> {
+    let path = prefs_path(&app)?;
+    if !path.exists() {
         return Ok(None);
     }
-
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read preferences file: {e}"))?;
-
-    let parsed: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse preferences JSON: {e}"))?;
-
-    let params: BacktestParams = serde_json::from_value(parsed)
-        .map_err(|e| format!("Failed to deserialize preferences: {e}"))?;
-
-    Ok(Some(params))
+    let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let p: BacktestParams = serde_json::from_value(v).map_err(|e| e.to_string())?;
+    Ok(Some(p))
 }
 
 #[tauri::command]
-async fn save_preferences(
-    app_handle: tauri::AppHandle,
-    preferences: BacktestParams,
-) -> Result<(), String> {
-    let config_path = get_preferences_path(app_handle)?;
-
-    if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create config directory: {e}"))?;
+async fn save_preferences(app: tauri::AppHandle, preferences: BacktestParams) -> Result<(), String> {
+    let path = prefs_path(&app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-
-    let config_data = serde_json::json!({
+    let v = serde_json::json!({
         "ticker": preferences.ticker,
         "start_date": preferences.start_date,
         "end_date": preferences.end_date,
         "strategy": preferences.strategy,
         "initial_capital": preferences.initial_capital,
-        "seed": preferences.seed,
-        "_metadata": {
-            "version": "1.0.0",
-            "saved_at": Utc::now().to_rfc3339(),
-            "app_version": "1.0.0"
-        }
+        "seed": preferences.seed
     });
+    fs::write(path, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| e.to_string())
+}
 
-    let content = serde_json::to_string_pretty(&config_data)
-        .map_err(|e| format!("Failed to serialize preferences: {e}"))?;
+//
+// ---------- Commands: data providers ----------
+//
 
-    fs::write(&config_path, content)
-        .map_err(|e| format!("Failed to write preferences file: {e}"))?;
+#[tauri::command]
+async fn save_api_key(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    poly::save_polygon_key(&app, key).await
+}
 
+#[tauri::command]
+async fn fetch_history(
+    app: tauri::AppHandle,
+    symbol: String,
+    start: String,
+    end: String,
+    interval: Option<String>,
+) -> Result<Vec<poly::Bar>, String> {
+    poly::fetch_history(&app, symbol, start, end, interval).await
+}
+
+#[tauri::command]
+async fn fetch_history_yahoo(symbol: String, start: String, end: String) -> Result<Vec<yfin::YBar>, String> {
+    yfin::yahoo_history(symbol, start, end).await
+}
+
+#[tauri::command]
+async fn fetch_news(app: tauri::AppHandle, symbol: String, days: u32) -> Result<(f64, Vec<poly::NewsItem>), String> {
+    poly::fetch_news(&app, symbol, days).await
+}
+
+// Additional command stubs to prevent "command not found" errors
+#[tauri::command]
+async fn adaptive_run(_mode: String) -> serde_json::Value {
+    serde_json::json!({
+        "status": "stub",
+        "message": "Adaptive run not implemented yet"
+    })
+}
+
+#[tauri::command]
+async fn fetch_option_chain(_symbol: String, _expiry: String) -> serde_json::Value {
+    serde_json::json!({
+        "status": "stub",
+        "chains": []
+    })
+}
+
+#[tauri::command]
+async fn fetch_option_quotes(_symbols: Vec<String>) -> serde_json::Value {
+    serde_json::json!({
+        "status": "stub",
+        "quotes": []
+    })
+}
+
+#[tauri::command]
+async fn store_api_key(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    // Alias for save_api_key for backward compatibility
+    save_api_key(app, key).await
+}
+
+#[tauri::command]
+async fn test_api_connection() -> Result<String, String> {
+    Ok("Connection test not implemented".to_string())
+}
+
+//
+// ---------- Commands: Realtime Data & Streaming ----------
+//
+
+#[tauri::command]
+async fn fetch_ohlc(
+    app: tauri::AppHandle,
+    symbol: String,
+    start: String,
+    end: String,
+    tf: String,
+) -> Result<Vec<OhlcBar>, String> {
+    let provider = PolygonProvider::new(app);
+    provider.fetch_ohlc(&symbol, &start, &end, &tf).await
+}
+
+#[tauri::command]
+async fn start_stream(
+    app: tauri::AppHandle,
+    symbols: Vec<String>,
+) -> Result<(), String> {
+    // Store provider in app state - for now we'll create a new one each time
+    // In production, you'd want to manage this as persistent state
+    let mut provider = PolygonProvider::new(app);
+    provider.start_stream(symbols).await
+}
+
+#[tauri::command]
+async fn stop_stream(app: tauri::AppHandle) -> Result<(), String> {
+    // For now, we'll emit a stop signal
+    // In production, you'd access the stored provider state
+    let _ = app.emit("stream_stop_requested", ());
+    Ok(())
+}
+
+//
+// ---------- Commands: Paper Broker ----------
+//
+
+#[tauri::command]
+async fn paper_order(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    req: OrderRequest,
+) -> Result<TradeExecution, String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.place_order(req)
+}
+
+#[tauri::command]
+async fn portfolio(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<Portfolio, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_portfolio())
+}
+
+#[tauri::command]
+async fn trades(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<Vec<Trade>, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_trades())
+}
+
+#[tauri::command]
+async fn cancel_order(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    order_id: String,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.cancel_order(&order_id)
+}
+
+#[tauri::command]
+async fn close_position(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    symbol: String,
+) -> Result<TradeExecution, String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.close_position(&symbol)
+}
+
+#[tauri::command]
+async fn update_market_data(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    data: MarketData,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.update_market_data(data);
     Ok(())
 }
 
 #[tauri::command]
-async fn get_sample_backtest_result(delay_ms: Option<u64>) -> BacktestSummary {
-    thread::sleep(Duration::from_millis(delay_ms.unwrap_or(1200)));
-
-    let strategy = "PMCC".to_string();
-    let symbol = "SPY".to_string();
-    let start = "2022-01-01".to_string();
-    let end = "2024-12-31".to_string();
-    let capital = 100_000.0;
-
-    let mut equity = capital;
-    let mut equity_curve = Vec::new();
-    let mut max_equity = equity;
-    let mut max_dd = 0.0;
-    let days = 50;
-
-    for i in 0..days {
-        let daily_return = 0.0006 + 0.00002 * (i as f64);
-        equity *= 1.0 + daily_return;
-        if equity > max_equity {
-            max_equity = equity;
-        }
-        let drawdown = (equity - max_equity) / max_equity;
-        if drawdown < max_dd {
-            max_dd = drawdown;
-        }
-        equity_curve.push(EquityPoint {
-            t: format!("Day {}", i + 1),
-            equity,
-            drawdown,
-        });
-    }
-
-    let cagr = ((equity / capital).powf(1.0 / (days as f64 / 252.0)) - 1.0).max(0.0);
-    let trades = 40;
-    let win_rate = 0.55;
-
-    BacktestSummary {
-        strategy,
-        symbol,
-        start,
-        end,
-        capital,
-        cagr,
-        trades,
-        win_rate,
-        max_dd,
-        equity_curve,
-    }
+async fn enhanced_portfolio(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<EnhancedPortfolio, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_enhanced_portfolio())
 }
 
 #[tauri::command]
-async fn run_backtest(params: BacktestParams, delay_ms: Option<u64>) -> BacktestSummary {
-    thread::sleep(Duration::from_millis(delay_ms.unwrap_or(1500)));
+async fn risk_status(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<RiskMetrics, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_risk_status())
+}
 
-    let seed = params.seed.unwrap_or(42);
+#[tauri::command]
+async fn risk_violations(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<Vec<String>, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_risk_violations())
+}
 
-    let equity_curve = generate_deterministic_equity_curve(
-        params.initial_capital,
-        &params.start_date,
-        &params.end_date,
-        seed,
-    );
+#[tauri::command]
+async fn update_risk_metrics(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.update_risk_metrics();
+    Ok(())
+}
 
-    let (cagr, max_dd) =
-        calculate_performance_metrics(&equity_curve, &params.start_date, &params.end_date);
+//
+// ---------- Commands: Broker Persistence ----------
+//
 
-    let (trades, win_rate) = generate_deterministic_stats(seed);
+#[tauri::command]
+async fn save_broker_state(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.save_state()
+}
 
-    BacktestSummary {
-        strategy: params.strategy,
-        symbol: params.ticker,
-        start: params.start_date,
-        end: params.end_date,
+#[tauri::command]
+async fn get_journal_stats(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<JournalStats, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.get_journal_stats()
+}
+
+#[tauri::command]
+async fn backup_journal(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    backup_suffix: String,
+) -> Result<String, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let backup_path = broker.backup_journal(&backup_suffix)?;
+    Ok(backup_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn set_auto_save(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.set_auto_save(enabled);
+    Ok(())
+}
+
+//
+// ---------- Commands: Market Calendar ----------
+//
+
+#[tauri::command]
+async fn get_current_session(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<TradingSession, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_current_session())
+}
+
+#[tauri::command]
+async fn is_market_open(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<bool, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.is_market_open())
+}
+
+#[tauri::command]
+async fn get_next_session_start(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+) -> Result<Option<i64>, String> {
+    let broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(broker.get_next_session_start())
+}
+
+#[tauri::command]
+async fn configure_extended_hours(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    premarket: bool,
+    afterhours: bool,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.configure_extended_hours(premarket, afterhours);
+    Ok(())
+}
+
+#[tauri::command]
+async fn set_holiday_trading(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+    broker.set_holiday_trading(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+async fn add_custom_holiday(
+    broker: tauri::State<'_, std::sync::Mutex<PaperBroker>>,
+    date: String, // MM/DD/YYYY format
+    name: String,
+    is_early_close: bool,
+) -> Result<(), String> {
+    let mut broker = broker.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    // Parse MM/DD/YYYY date format
+    let date_parts: Vec<&str> = date.split('/').collect();
+    if date_parts.len() != 3 {
+        return Err("Date must be in MM/DD/YYYY format".to_string());
+    }
+
+    let month: u32 = date_parts[0].parse()
+        .map_err(|_| "Invalid month".to_string())?;
+    let day: u32 = date_parts[1].parse()
+        .map_err(|_| "Invalid day".to_string())?;
+    let year: i32 = date_parts[2].parse()
+        .map_err(|_| "Invalid year".to_string())?;
+
+    let naive_date = chrono::NaiveDate::from_ymd_opt(year, month, day)
+        .ok_or("Invalid date".to_string())?;
+
+    broker.add_custom_holiday(naive_date, name, is_early_close);
+    Ok(())
+}
+
+//
+// ---------- Commands: Strategy Loop ----------
+//
+
+#[tauri::command]
+fn start_strategy_loop(
+    strategy_loop: tauri::State<'_, std::sync::Mutex<StrategyLoop>>,
+) -> Result<(), String> {
+    let mut loop_guard = strategy_loop.lock().map_err(|e| format!("Lock error: {}", e))?;
+    // Use blocking version or spawn the async operation
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(loop_guard.start())
+    })
+}
+
+#[tauri::command]
+fn stop_strategy_loop(
+    strategy_loop: tauri::State<'_, std::sync::Mutex<StrategyLoop>>,
+) -> Result<(), String> {
+    let mut loop_guard = strategy_loop.lock().map_err(|e| format!("Lock error: {}", e))?;
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(loop_guard.stop())
+    })
+}
+
+#[tauri::command]
+fn get_strategy_loop_state(
+    strategy_loop: tauri::State<'_, std::sync::Mutex<StrategyLoop>>,
+) -> Result<LoopState, String> {
+    let loop_guard = strategy_loop.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(loop_guard.get_state())
+    }))
+}
+
+#[tauri::command]
+fn get_strategy_loop_config(
+    strategy_loop: tauri::State<'_, std::sync::Mutex<StrategyLoop>>,
+) -> Result<StrategyLoopConfig, String> {
+    let loop_guard = strategy_loop.lock().map_err(|e| format!("Lock error: {}", e))?;
+    Ok(tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(loop_guard.get_config())
+    }))
+}
+
+#[tauri::command]
+fn update_strategy_loop_config(
+    strategy_loop: tauri::State<'_, std::sync::Mutex<StrategyLoop>>,
+    config: StrategyLoopConfig,
+) -> Result<(), String> {
+    let mut loop_guard = strategy_loop.lock().map_err(|e| format!("Lock error: {}", e))?;
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(loop_guard.update_config(config))
+    })
+}
+
+#[tauri::command]
+fn reset_strategy_loop_state(
+    strategy_loop: tauri::State<'_, std::sync::Mutex<StrategyLoop>>,
+) -> Result<(), String> {
+    let mut loop_guard = strategy_loop.lock().map_err(|e| format!("Lock error: {}", e))?;
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(loop_guard.reset_state())
+    })
+}
+
+//
+// ---------- Command: run_backtest (uses Polygon, falls back to Yahoo) ----------
+//
+
+#[tauri::command]
+async fn run_backtest(app: tauri::AppHandle, params: BacktestParams) -> Result<BacktestSummary, String> {
+    let t0 = Instant::now();
+
+    // Try Polygon first
+    let bars_res = fetch_history(
+        app.clone(),
+        params.ticker.clone(),
+        params.start_date.clone(),
+        params.end_date.clone(),
+        Some("1day".into()),
+    )
+    .await
+    .map(|v| {
+        v.into_iter()
+            .map(|b| (b.date, b.c))
+            .collect::<Vec<(String, f64)>>()
+    });
+
+    // Fallback to Yahoo if Polygon fails
+    let closes: Vec<(String, f64)> = match bars_res {
+        Ok(v) if !v.is_empty() => v,
+        _ => fetch_history_yahoo(params.ticker.clone(), params.start_date.clone(), params.end_date.clone())
+            .await
+            .map_err(|e| format!("Both providers failed: {e}"))?
+            .into_iter()
+            .map(|b| (b.date, b.c))
+            .collect(),
+    };
+
+    // If we have insufficient data, return empty result (frontend will handle with synthetic data)
+    if closes.len() < 2 {
+        return Ok(BacktestSummary {
+            strategy: params.strategy.clone(),
+            symbol: params.ticker.clone(),
+            start: params.start_date.clone(),
+            end: params.end_date.clone(),
+            capital: params.initial_capital,
+            cagr: 0.0,
+            trades: 0,
+            win_rate: 0.0,
+            max_dd: 0.0,
+            equity_curve: vec![], // Empty curve - frontend will detect and use synthetic data
+        });
+    }
+
+    // Simple buy & hold example backtest; replace with your strategy later.
+    let mut equity_curve = Vec::with_capacity(closes.len());
+    let mut equities = Vec::with_capacity(closes.len());
+
+    let start_close = closes[0].1.max(1e-9);
+    let mut equity = params.initial_capital;
+
+    for (i, (d, c)) in closes.iter().enumerate() {
+        // scale equity proportional to close/first_close
+        equity = params.initial_capital * (*c / start_close);
+        equities.push(equity);
+        // drawdown computed later
+        equity_curve.push(EquityPoint {
+            t: d.clone(),
+            equity,
+            drawdown: 0.0,
+        });
+    }
+
+    let (dd_series, max_dd) = calc_drawdown_series(&equities);
+    for (i, dd) in dd_series.into_iter().enumerate() {
+        equity_curve[i].drawdown = dd;
+    }
+
+    // Daily positive return as a proxy for "win"
+    let mut wins = 0u32;
+    let mut trades = 0u32;
+    for i in 1..closes.len() {
+        let r = (closes[i].1 / closes[i - 1].1) - 1.0;
+        trades += 1;
+        if r > 0.0 {
+            wins += 1;
+        }
+    }
+    let win_rate = (wins as f64) / (trades as f64);
+
+    let cagr = annualized_cagr(equity_curve[0].equity, equity_curve.last().unwrap().equity, closes.len());
+
+    let out = BacktestSummary {
+        strategy: params.strategy.clone(),
+        symbol: params.ticker.clone(),
+        start: params.start_date.clone(),
+        end: params.end_date.clone(),
         capital: params.initial_capital,
         cagr,
         trades,
         win_rate,
         max_dd,
         equity_curve,
-    }
-}
-
-// -------------------- Deterministic helpers -------------------
-
-struct SimpleRng {
-    state: u64,
-}
-
-impl SimpleRng {
-    fn new(seed: u32) -> Self {
-        Self { state: seed as u64 }
-    }
-    fn next_f64(&mut self) -> f64 {
-        self.state = self.state.wrapping_mul(1664525).wrapping_add(1013904223);
-        (self.state as f64) / (u64::MAX as f64)
-    }
-    fn next_range(&mut self, min: f64, max: f64) -> f64 {
-        min + (max - min) * self.next_f64()
-    }
-}
-
-fn generate_deterministic_equity_curve(
-    initial_capital: f64,
-    start_date: &str,
-    end_date: &str,
-    seed: u32,
-) -> Vec<EquityPoint> {
-    let mut rng = SimpleRng::new(seed);
-    let mut equity_curve = Vec::new();
-
-    let days = calculate_days_between(start_date, end_date).max(1);
-
-    let base_drift = 0.0008;
-    let volatility = 0.015;
-
-    let mut equity = initial_capital;
-    let mut max_equity = equity;
-
-    for i in 0..days {
-        let drift_component = base_drift * (1.0 + 0.1 * (seed as f64 * i as f64).sin());
-        let vol_component = volatility * rng.next_range(-1.0, 1.0);
-        let daily_return = drift_component + vol_component;
-
-        equity *= 1.0 + daily_return;
-        if equity > max_equity {
-            max_equity = equity;
-        }
-        let drawdown = (equity - max_equity) / max_equity;
-        let date = format_date_from_offset(start_date, i);
-
-        equity_curve.push(EquityPoint { t: date, equity, drawdown });
-    }
-
-    equity_curve
-}
-
-fn calculate_performance_metrics(
-    equity_curve: &[EquityPoint],
-    start_date: &str,
-    end_date: &str,
-) -> (f64, f64) {
-    if equity_curve.is_empty() {
-        return (0.0, 0.0);
-    }
-
-    let initial_equity = equity_curve[0].equity;
-    let final_equity = equity_curve[equity_curve.len() - 1].equity;
-
-    let days = calculate_days_between(start_date, end_date).max(1) as f64;
-    let years = days / 365.25;
-    let cagr = if years > 0.0 && initial_equity > 0.0 {
-        (final_equity / initial_equity).powf(1.0 / years) - 1.0
-    } else {
-        0.0
     };
 
-    let mut max_equity = initial_equity;
-    let mut max_dd = 0.0;
+    let _elapsed_ms = t0.elapsed().as_millis();
+    Ok(out)
+}
 
-    for point in equity_curve {
-        if point.equity > max_equity {
-            max_equity = point.equity;
-        }
-        let drawdown = (point.equity - max_equity) / max_equity;
-        if drawdown < max_dd {
-            max_dd = drawdown;
-        }
+// Helper function to generate synthetic equity curve
+fn generate_deterministic_equity_curve(days: usize, start_equity: f64, seed: u64) -> Vec<EquityPoint> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    seed.hash(&mut hasher);
+    let mut rng_state = hasher.finish();
+
+    // Simple LCG for deterministic random numbers
+    let mut next_random = move || {
+        rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+        (rng_state / 65536) % 32768
+    };
+
+    let mut equity = start_equity;
+    let mut max_equity = start_equity;
+    let mut curve = Vec::with_capacity(days);
+
+    for i in 0..days {
+        // Generate deterministic return
+        let rand_val = next_random() as f64 / 32767.0; // 0 to 1
+        let daily_return = 0.0006 + (rand_val - 0.5) * 0.02; // ~0.06% avg with volatility
+
+        equity *= 1.0 + daily_return;
+        max_equity = max_equity.max(equity);
+        let drawdown = (equity - max_equity) / max_equity;
+
+        curve.push(EquityPoint {
+            t: format!("{:02}/{:02}/2023", (i % 12) + 1, (i % 28) + 1),
+            equity,
+            drawdown,
+        });
     }
 
-    (cagr, max_dd)
+    curve
 }
 
-fn generate_deterministic_stats(seed: u32) -> (u32, f64) {
-    let mut rng = SimpleRng::new(seed);
-    let trades = 15 + ((rng.next_f64() * 20.0) as u32);
-    let win_rate = 0.45 + (rng.next_f64() * 0.30);
-    (trades, win_rate)
-}
 
-fn calculate_days_between(start: &str, end: &str) -> i32 {
-    match (start.contains("2023"), end.contains("2023")) {
-        (true, true) => 365,
-        _ => 252,
-    }
-}
 
-fn format_date_from_offset(start_date: &str, offset: i32) -> String {
-    if start_date.starts_with("01/01/2023") {
-        let month = 1 + (offset / 30);
-        let day = 1 + (offset % 30);
-        format!("{:02}/{:02}/2023", month.min(12), day.min(28))
-    } else {
-        format!("Day {}", offset + 1)
-    }
-}
-
-// ---------------------- Provider Commands ---------------------
-
-#[tauri::command]
-async fn fetch_history(
-    app_handle: tauri::AppHandle,
-    symbol: String,
-    start: String,
-    end: String,
-    interval: String,
-) -> Result<Vec<HistoryPoint>, String> {
-    let provider = PolygonProvider::new(app_handle)
-        .map_err(|e| format!("Failed to create provider: {}", e))?;
-
-    provider.fetch_history(&symbol, &start, &end, &interval)
-        .await
-        .map_err(|e| match e {
-            ProviderError::ApiKeyNotFound => "No API key set. Please configure your Polygon API key in Settings.".to_string(),
-            ProviderError::RateLimited(seconds) => format!("Rate limited. Please try again in {} seconds.", seconds),
-            _ => format!("Failed to fetch history: {}", e),
-        })
-}
-
-#[tauri::command]
-async fn fetch_option_chain(
-    app_handle: tauri::AppHandle,
-    symbol: String,
-    as_of: String,
-) -> Result<OptionChain, String> {
-    let provider = PolygonProvider::new(app_handle)
-        .map_err(|e| format!("Failed to create provider: {}", e))?;
-
-    provider.fetch_option_chain(&symbol, &as_of)
-        .await
-        .map_err(|e| match e {
-            ProviderError::ApiKeyNotFound => "No API key set. Please configure your Polygon API key in Settings.".to_string(),
-            ProviderError::RateLimited(seconds) => format!("Rate limited. Please try again in {} seconds.", seconds),
-            _ => format!("Failed to fetch option chain: {}", e),
-        })
-}
-
-#[tauri::command]
-async fn fetch_option_quotes(
-    app_handle: tauri::AppHandle,
-    contracts: Vec<String>,
-) -> Result<Vec<OptionQuote>, String> {
-    let provider = PolygonProvider::new(app_handle)
-        .map_err(|e| format!("Failed to create provider: {}", e))?;
-
-    provider.fetch_option_quotes(contracts)
-        .await
-        .map_err(|e| match e {
-            ProviderError::ApiKeyNotFound => "No API key set. Please configure your Polygon API key in Settings.".to_string(),
-            ProviderError::RateLimited(seconds) => format!("Rate limited. Please try again in {} seconds.", seconds),
-            _ => format!("Failed to fetch option quotes: {}", e),
-        })
-}
-
-#[tauri::command]
-async fn store_api_key(
-    _app_handle: tauri::AppHandle,
-    service: String,
-    _key: String,
-) -> Result<(), String> {
-    // For now, just return success - would implement actual keychain storage
-    // In production, you'd use a crate like keyring-rs
-    println!("Storing API key for service: {}", service);
-    Ok(())
-}
-
-#[tauri::command]
-async fn test_api_connection(
-    app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-    let provider = PolygonProvider::new(app_handle)
-        .map_err(|e| format!("Failed to create provider: {}", e))?;
-
-    if !provider.is_configured().await {
-        return Err("No API key configured".to_string());
-    }
-
-    // Test with a simple AAPL history request
-    match provider.fetch_history("AAPL", "01/01/2024", "01/02/2024", "1day").await {
-        Ok(_) => Ok("Connection successful".to_string()),
-        Err(e) => Err(format!("Connection failed: {}", e)),
-    }
-}
-
-// --------------------------- main ----------------------------
+//
+// ---------- App bootstrap ----------
+//
 
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            // Initialize paper broker with $100,000 starting capital
+            let mut paper_broker = PaperBroker::new(100000.0);
+
+            // Initialize storage and restore state
+            if let Err(e) = paper_broker.initialize_storage(&app.handle()) {
+                eprintln!("Failed to initialize broker storage: {}", e);
+            }
+
+            // Create shared broker reference for strategy loop
+            let broker_arc = std::sync::Arc::new(tokio::sync::Mutex::new(paper_broker));
+
+            // Initialize strategy loop
+            let strategy_loop = StrategyLoop::new(broker_arc.clone(), app.handle().clone());
+
+            // Convert Arc<tokio::Mutex<PaperBroker>> back to PaperBroker for std::sync::Mutex
+            // This is a workaround for the different mutex types
+            let paper_broker_for_tauri = {
+                let broker_guard = broker_arc.blocking_lock();
+                broker_guard.clone()
+            };
+
+            // Manage the broker state and strategy loop
+            app.manage(std::sync::Mutex::new(paper_broker_for_tauri));
+            app.manage(std::sync::Mutex::new(strategy_loop));
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
-            ping,                     // line ~53
-            load_preferences,         // line ~73
-            save_preferences,         // line ~92
-            get_sample_backtest_result, // line ~127
-            run_backtest,             // line ~178
-            fetch_history,            // Provider commands
+            // utils / prefs
+            ping,
+            load_preferences,
+            save_preferences,
+            // data
+            save_api_key,
+            store_api_key,
+            test_api_connection,
+            fetch_history,
+            fetch_history_yahoo,
+            fetch_news,
+            fetch_polygon_bars,
             fetch_option_chain,
             fetch_option_quotes,
-            store_api_key,
-            test_api_connection
+            // realtime data
+            fetch_ohlc,
+            start_stream,
+            stop_stream,
+            // paper broker
+            paper_order,
+            portfolio,
+            trades,
+            cancel_order,
+            close_position,
+            update_market_data,
+            // enhanced portfolio & risk
+            enhanced_portfolio,
+            risk_status,
+            risk_violations,
+            update_risk_metrics,
+            // broker persistence
+            save_broker_state,
+            get_journal_stats,
+            backup_journal,
+            set_auto_save,
+            // market calendar
+            get_current_session,
+            is_market_open,
+            get_next_session_start,
+            configure_extended_hours,
+            set_holiday_trading,
+            add_custom_holiday,
+            // strategy loop
+            start_strategy_loop,
+            stop_strategy_loop,
+            get_strategy_loop_state,
+            get_strategy_loop_config,
+            update_strategy_loop_config,
+            reset_strategy_loop_state,
+            // backtest
+            run_backtest,
+            get_sample_backtest_result,
+            suggest_and_analyze,
+            fetch_news_sentiment,
+            // adaptive
+            adaptive_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

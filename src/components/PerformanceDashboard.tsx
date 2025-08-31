@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from 'react';
+import { parseMMDDYYYY } from '@/lib/date';
 
 import {
   Target,
@@ -93,16 +94,16 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   const equityCurve = equity_curve ?? [];
 
   return (
-    <div className={`performance-dashboard space-y-6 ${className}`}>
+    <div className={`performance-dashboard section-gap space-y-6 ${className}`}>
       {/* Header Section */}
-      <div className="dashboard-header bg-white rounded-lg shadow-sm border border-neutral-200 p-6">
-        <div className="flex items-center justify-between">
+      <div className="dashboard-header bg-white rounded-lg shadow-sm border border-neutral-200 card-padding">
+        <div className="flex items-center justify-between card-header-height">
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900 flex items-center space-x-2">
+            <h1 className="section-title flex items-center gap-2">
               <BarChart3 className="w-6 h-6 text-primary-600" />
               <span>Performance Dashboard</span>
             </h1>
-            <p className="text-neutral-600 mt-1">
+            <p className="caption-text mt-2">
               Comprehensive backtest analysis and metrics
             </p>
           </div>
@@ -175,12 +176,24 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
       </div>
 
       {/* Result Summary Cards */}
-      <ResultSummary summary={backtestResult} className="animate-fade-in" />
+      <ResultSummary rows={[
+        ['Strategy', backtestResult.strategy],
+        ['Symbol', backtestResult.symbol],
+        ['Start Date', backtestResult.start],
+        ['End Date', backtestResult.end],
+        ['Total Trades', String(backtestResult.trades)],
+        ['Win Rate', `${(backtestResult.win_rate * 100).toFixed(2)}%`],
+        ['CAGR', `${(backtestResult.cagr * 100).toFixed(2)}%`],
+        ['Max Drawdown', `${(Math.abs(backtestResult.max_dd) * 100).toFixed(2)}%`],
+      ]} />
 
       {/* Charts Section */}
       <div className="charts-section grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Equity Curve Chart */}
-        <EquityCurve data={backtestResult.equity_curve} className="animate-slide-up" />
+        <EquityCurve data={backtestResult.equity_curve.map(p => ({
+          date: parseMMDDYYYY(p.t),
+          value: p.equity
+        }))} className="animate-slide-up" />
 
         {/* Drawdown Curve Chart */}
         <DrawdownCurve data={backtestResult.equity_curve} className="animate-slide-up" />
@@ -189,12 +202,12 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
       {/* Simplified Metrics Row */}
       <div className="additional-metrics grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Strategy Information */}
-        <div className="strategy-info bg-white rounded-lg shadow-sm border border-neutral-200 p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center space-x-2">
+        <div className="strategy-info bg-white rounded-lg shadow-sm border border-neutral-200 card-padding">
+          <h3 className="subsection-title mb-6 flex items-center gap-2 card-header-height">
             <Target className="w-5 h-5" />
             <span>Strategy Details</span>
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <StatRow label="Strategy" value={strategy} />
             <StatRow label="Total Trades" value={formatNumber(trades)} />
             <StatRow
@@ -211,12 +224,12 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
         </div>
 
         {/* Performance Summary */}
-        <div className="performance-summary bg-white rounded-lg shadow-sm border border-neutral-200 p-6">
-          <h3 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center space-x-2">
+        <div className="performance-summary bg-white rounded-lg shadow-sm border border-neutral-200 card-padding">
+          <h3 className="subsection-title mb-6 flex items-center gap-2 card-header-height">
             <Shield className="w-5 h-5" />
             <span>Performance Summary</span>
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <StatRow label="Start Date" value={start} />
             <StatRow label="End Date" value={end} />
             <StatRow

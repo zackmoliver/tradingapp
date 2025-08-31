@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Router Error Solution</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.development.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .problem, .solution {
+            flex: 1;
+            min-width: 300px;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h2 {
+            color: #6e8efb;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .comment {
+            color: #75715e;
+        }
+        
+        .keyword {
+            color: #f92672;
+        }
+        
+        .function {
+            color: #66d9ef;
+        }
+        
+        .string {
+            color: #a6e22e;
+        }
+        
+        .correct {
+            color: #a6e22e;
+            font-weight: bold;
+        }
+        
+        .incorrect {
+            color: #f92672;
+            font-weight: bold;
+        }
+        
+        .explanation {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #6e8efb;
+            border-radius: 4px;
+        }
+        
+        .steps {
+            margin: 20px 0;
+            padding-left: 20px;
+        }
+        
+        .steps li {
+            margin-bottom: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Router Error Solution</h1>
+            <p class="subtitle">Fixing "You cannot render a &lt;Router&gt; inside another &lt;Router&gt;" in React</p>
+        </header>
+        
+        <div class="content">
+            <div class="problem">
+                <h2>The Problem</h2>
+                <p>You're seeing this error because you have nested Router components:</p>
+                
+                <div class="code-block">
+                    <span class="comment">// Incorrect code structure</span><br>
+                    <span class="keyword">function</span> <span class="function">App</span>() {<br>
+                    &nbsp;&nbsp;<span class="keyword">return</span> (<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;HashRouter&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">// App content...</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;HashRouter&gt; <span class="comment">// ERROR: Nested Router!</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Routes&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Route path="/" element={&lt;HomePage /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/Routes&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/HashRouter&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;/HashRouter&gt;<br>
+                    &nbsp;&nbsp;);<br>
+                    }
+                </div>
+                
+                <div class="explanation">
+                    <p>React Router doesn't allow nested Router components because:</p>
+                    <ul class="steps">
+                        <li>Each Router creates its own routing context</li>
+                        <li>Nested Routers conflict with each other</li>
+                        <li>It breaks the single source of truth for routing state</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="solution">
+                <h2>The Solution</h2>
+                <p>Remove the nested Router and structure your app with a single Router at the top level:</p>
+                
+                <div class="code-block">
+                    <span class="comment">// Correct code structure</span><br>
+                    <span class="keyword">function</span> <span class="function">App</span>() {<br>
+                    &nbsp;&nbsp;<span class="keyword">return</span> (<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;HashRouter&gt; <span class="comment">// Only one Router at the top level</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Routes&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Route path="/" element={&lt;HomePage /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Route path="/dashboard" element={&lt;Dashboard /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;Route path="/settings" element={&lt;Settings /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/Routes&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;/HashRouter&gt;<br>
+                    &nbsp;&nbsp;);<br>
+                    }
+                </div>
+                
+                <div class="explanation">
+                    <p>To fix this issue:</p>
+                    <ol class="steps">
+                        <li>Ensure you have only one Router component at the top level of your app</li>
+                        <li>If using multiple routes, structure them with a single Router</li>
+                        <li>Check for accidental Router imports in child components</li>
+                    </ol>
+                </div>
+                
+                <div class="code-block">
+                    <span class="comment">// If you need multiple routes, use nested routes instead:</span><br>
+                    &lt;Routes&gt;<br>
+                    &nbsp;&nbsp;&lt;Route path="/" element={&lt;Layout /&gt;}&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;Route index element={&lt;HomePage /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;Route path="dashboard" element={&lt;Dashboard /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&lt;Route path="settings" element={&lt;Settings /&gt;} /&gt;<br>
+                    &nbsp;&nbsp;&lt;/Route&gt;<br>
+                    &lt;/Routes&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        // This is a demonstration of the correct way to structure routers
+        const { HashRouter, Routes, Route, Link } = ReactRouterDOM;
+        
+        function HomePage() {
+            return (
+                React.createElement('div', null, 
+                    React.createElement('h2', null, 'Home Page'),
+                    React.createElement('p', null, 'This is the home page of your application.')
+                )
+            );
+        }
+        
+        function Dashboard() {
+            return (
+                React.createElement('div', null, 
+                    React.createElement('h2', null, 'Dashboard'),
+                    React.createElement('p', null, 'This is the dashboard page.')
+                )
+            );
+        }
+        
+        function Settings() {
+            return (
+                React.createElement('div', null, 
+                    React.createElement('h2', null, 'Settings'),
+                    React.createElement('p', null, 'This is the settings page.')
+                )
+            );
+        }
+        
+        function Navigation() {
+            return (
+                React.createElement('nav', null, 
+                    React.createElement('ul', {style: {listStyle: 'none', padding: 0, display: 'flex', gap: '20px'}}, 
+                        React.createElement('li', null, 
+                            React.createElement(Link, {to: "/", style: {textDecoration: 'none', color: '#6e8efb'}}, 'Home')
+                        ),
+                        React.createElement('li', null, 
+                            React.createElement(Link, {to: "/dashboard", style: {textDecoration: 'none', color: '#6e8efb'}}, 'Dashboard')
+                        ),
+                        React.createElement('li', null, 
+                            React.createElement(Link, {to: "/settings", style: {textDecoration: 'none', color: '#6e8efb'}}, 'Settings')
+                        )
+                    )
+                )
+            );
+        }
+        
+        function Layout() {
+            return (
+                React.createElement('div', null, 
+                    React.createElement('h1', null, 'My Application'),
+                    React.createElement(Navigation, null),
+                    React.createElement('main', {style: {marginTop: '20px'}}, 
+                        React.createElement(Outlet, null)
+                    )
+                )
+            );
+        }
+        
+        // Correct App component with single Router
+        function App() {
+            return (
+                React.createElement(HashRouter, null, 
+                    React.createElement(Routes, null, 
+                        React.createElement(Route, {path: "/", element: React.createElement(Layout, null)}, 
+                            React.createElement(Route, {index: true, element: React.createElement(HomePage, null)}),
+                            React.createElement(Route, {path: "dashboard", element: React.createElement(Dashboard, null)}),
+                            React.createElement(Route, {path: "settings", element: React.createElement(Settings, null)})
+                        )
+                    )
+                )
+            );
+        }
+        
+        // Render the app
+        const root = ReactDOM.createRoot(document.body);
+        root.render(React.createElement(App, null));
+    </script>
+</body>
+</html>

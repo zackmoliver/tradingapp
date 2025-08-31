@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './tauri';
 
 // Types matching the Rust backend
 export interface HistoryPoint {

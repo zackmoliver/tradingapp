@@ -1,51 +1,24 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.tradingapp.dev",
   "productName": "trading-app",
   "version": "0.1.0",
-  "identifier": "com.tradingapp.dev",
-
   "build": {
-    "beforeDevCommand": "vite --port 8080 --strictPort",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:8080",
     "frontendDist": "../dist"
   },
-
   "app": {
-    "security": {
-      "csp": null,
-      "capabilities": [
-        {
-          "identifier": "main-capability",
-          "description": "Main application capabilities",
-          "windows": ["main"],
-          "permissions": [
-            { "identifier": "core:default" },
-            { "identifier": "core:path:default" }
-          ]
-        }
-      ]
-    },
+    "security": { "csp": null },
     "windows": [
       {
-        "label": "main",
         "title": "Trading App",
         "width": 1200,
         "height": 800,
         "resizable": true,
         "fullscreen": false
       }
-    ]
-  },
-
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
     ]
   }
 }

@@ -1,201 +1,189 @@
-/**
- * Equity Curve Chart Component
- * 
- * Professional responsive chart displaying portfolio equity over time.
- * Uses Recharts with proper formatting and responsive design.
- * 
- * Props: data from BacktestSummary.equity_curve
- * X-axis: t (date in MM/DD/YYYY format)
- * Y-axis: equity (portfolio value)
- */
-
-import React from 'react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine
-} from 'recharts';
-import { TrendingUp } from 'lucide-react';
-import { BacktestPoint } from '../types/backtest';
+import React, { useState } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Area, AreaChart, Legend } from "recharts";
+import { toMMDDYYYY, toMoney, toPct, parseMMDDYYYY } from "@/lib/date";
+import { BacktestPoint } from "@/types/backtest";
+import { BenchmarkPoint } from "@/lib/benchmark";
 
 interface EquityCurveProps {
-  data: BacktestPoint[];
+  data: { date: Date; value: number }[] | BacktestPoint[];
+  benchmarkData?: BenchmarkPoint[];
   className?: string;
+  height?: string | number;
+  showDrawdown?: boolean;
+  showBenchmark?: boolean;
+  onBenchmarkToggle?: (show: boolean) => void;
 }
 
-interface ChartDataPoint {
-  date: string;
-  equity: number;
-  originalDate: string;
-}
+export default function EquityCurve({
+  data,
+  benchmarkData,
+  className = "",
+  height,
+  showDrawdown = false,
+  showBenchmark = false,
+  onBenchmarkToggle
+}: EquityCurveProps) {
+  const [viewMode, setViewMode] = useState<'equity' | 'drawdown' | 'both'>('equity');
+  const [internalShowBenchmark, setInternalShowBenchmark] = useState(showBenchmark);
 
-const EquityCurve: React.FC<EquityCurveProps> = ({ data, className = '' }) => {
-  // Transform data for Recharts
-  const chartData: ChartDataPoint[] = data.map(point => ({
-    date: point.t,
-    equity: point.equity,
-    originalDate: point.t
+  const handleBenchmarkToggle = (show: boolean) => {
+    setInternalShowBenchmark(show);
+    onBenchmarkToggle?.(show);
+  };
+
+  // Normalize data format
+  const chartData = data.map(d => {
+    if ('t' in d) {
+      // BacktestPoint format - use parseMMDDYYYY for proper parsing
+      const date = parseMMDDYYYY(d.t);
+      return {
+        date: date.getTime(),
+        portfolio: d.equity,
+        drawdown: d.drawdown * 100, // Convert to percentage
+        formattedDate: d.t
+      };
+    } else {
+      // Legacy format
+      return {
+        date: d.date.getTime(),
+        portfolio: d.value,
+        drawdown: 0,
+        formattedDate: toMMDDYYYY(d.date)
+      };
+    }
+  }).filter(d => !isNaN(d.date) && !isNaN(d.portfolio)); // Filter out invalid data
+
+  // Add benchmark data if available
+  const benchmarkMap = new Map<number, number>();
+  if (benchmarkData && internalShowBenchmark) {
+    benchmarkData.forEach(point => {
+      const date = parseMMDDYYYY(point.t);
+      if (!isNaN(date.getTime())) {
+        benchmarkMap.set(date.getTime(), point.equity);
+      }
+    });
+  }
+
+  // Merge benchmark data with chart data
+  const mergedData = chartData.map(point => ({
+    ...point,
+    benchmark: benchmarkMap.get(point.date) || null
   }));
 
-  // Calculate initial capital for reference line
-  const initialCapital = data.length > 0 ? data[0].equity : 100000;
+  const hasDrawdownData = mergedData.some(d => d.drawdown !== 0);
+  const hasBenchmarkData = benchmarkData && benchmarkData.length > 0;
 
-  // Format currency for display
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  // Format date for display
-  const formatDate = (dateStr: string): string => {
-    try {
-      // Handle MM/DD/YYYY format
-      if (dateStr.includes('/')) {
-        return dateStr;
-      }
-      
-      // Handle other date formats
-      const date = new Date(dateStr);
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      const year = date.getFullYear();
-      return `${month}/${day}/${year}`;
-    } catch {
-      return dateStr;
-    }
-  };
-
-  // Custom tooltip component
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const value = payload[0].value;
-      const formattedDate = formatDate(label);
-      
-      return (
-        <div className="bg-white p-3 border border-neutral-200 rounded-lg shadow-lg">
-          <p className="text-sm font-medium text-neutral-900 mb-1">
-            {formattedDate}
-          </p>
-          <p className="text-sm text-neutral-600">
-            Portfolio Value: <span className="font-semibold text-neutral-900">{formatCurrency(value)}</span>
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Custom tick formatter for X-axis
-  const formatXAxisTick = (tickItem: string): string => {
-    try {
-      const date = new Date(tickItem);
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      return `${month}/${day}`;
-    } catch {
-      // If parsing fails, try to extract month/day from MM/DD/YYYY
-      const parts = tickItem.split('/');
-      if (parts.length >= 2) {
-        return `${parseInt(parts[0])}/${parseInt(parts[1])}`;
-      }
-      return tickItem;
-    }
-  };
+  if (mergedData.length === 0) {
+    return (
+      <div className={`flex items-center justify-center h-[260px] text-slate-500 dark:text-slate-400 ${className}`}>
+        No data available
+      </div>
+    );
+  }
 
   return (
-    <div className={`equity-curve-chart bg-white rounded-lg shadow-sm border border-neutral-200 p-6 ${className}`}>
-      {/* Chart Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-neutral-900 flex items-center space-x-2">
-          <TrendingUp className="w-5 h-5 text-primary-600" />
-          <span>Equity Curve</span>
-        </h3>
-        <div className="text-sm text-neutral-500">
-          Portfolio Value Over Time
-        </div>
+    <div className={className}>
+      {/* Controls */}
+      <div className="flex gap-2 mb-4">
+        {hasDrawdownData && (
+          <>
+            <button
+              onClick={() => setViewMode('equity')}
+              className={`px-3 py-1 text-sm rounded ${
+                viewMode === 'equity'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              Equity
+            </button>
+            <button
+              onClick={() => setViewMode('drawdown')}
+              className={`px-3 py-1 text-sm rounded ${
+                viewMode === 'drawdown'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              Drawdown
+            </button>
+          </>
+        )}
+
+        {hasBenchmarkData && viewMode === 'equity' && (
+          <label className="flex items-center gap-2 ml-4">
+            <input
+              type="checkbox"
+              checked={internalShowBenchmark}
+              onChange={(e) => handleBenchmarkToggle(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm text-slate-700 dark:text-slate-300">Show Benchmark</span>
+          </label>
+        )}
       </div>
 
-      {/* Chart Container */}
-      <div className="chart-container h-80">
+      <div className="h-[260px] sm:h-[280px]" style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={chartData}
-            margin={{
-              top: 5,
-              right: 30,
-              left: 20,
-              bottom: 5,
-            }}
+            data={mergedData}
+            margin={{ top: 8, right: 16, bottom: 28, left: 8 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-            
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148,163,184,0.2)" />
             <XAxis
               dataKey="date"
-              stroke="#737373"
-              fontSize={12}
-              tickFormatter={formatXAxisTick}
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              scale="time"
+              tickMargin={10}
+              tickFormatter={(v: number) => {
+                const d = new Date(v);
+                return toMMDDYYYY(d);
+              }}
               interval="preserveStartEnd"
+              minTickGap={28}
             />
-            
             <YAxis
-              stroke="#737373"
-              fontSize={12}
-              tickFormatter={(value) => formatCurrency(value)}
-              domain={['dataMin * 0.95', 'dataMax * 1.05']}
+              tickFormatter={(v: number) => toMoney(v, 0)}
+              width={72}
+              tickMargin={8}
             />
-            
-            <Tooltip content={<CustomTooltip />} />
-            
-            {/* Reference line for initial capital */}
-            <ReferenceLine
-              y={initialCapital}
-              stroke="#94a3b8"
-              strokeDasharray="5 5"
-              label={{
-                value: "Initial Capital",
-                position: "insideTopRight",
-                style: { fontSize: '12px', fill: '#6b7280' }
+            <Tooltip
+              labelFormatter={(v: number) => toMMDDYYYY(new Date(v))}
+              formatter={(val: number, name: string) => {
+                if (name === 'portfolio') return [toMoney(val), 'Portfolio'];
+                if (name === 'benchmark') return [toMoney(val), 'Benchmark'];
+                return [toMoney(val), 'Equity'];
               }}
             />
-            
-            {/* Main equity line */}
+            {internalShowBenchmark && hasBenchmarkData && (
+              <Legend />
+            )}
             <Line
               type="monotone"
-              dataKey="equity"
+              dataKey="portfolio"
               stroke="#2563eb"
               strokeWidth={2}
               dot={false}
-              activeDot={{
-                r: 4,
-                stroke: '#2563eb',
-                strokeWidth: 2,
-                fill: '#ffffff'
-              }}
+              name="Portfolio"
+              isAnimationActive={false}
             />
+            {internalShowBenchmark && hasBenchmarkData && (
+              <Line
+                type="monotone"
+                dataKey="benchmark"
+                stroke="#64748b"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+                name="Benchmark"
+                isAnimationActive={false}
+                connectNulls={false}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Chart Footer */}
-      <div className="flex items-center justify-between mt-4 text-xs text-neutral-500">
-        <span>
-          Initial: {formatCurrency(initialCapital)}
-        </span>
-        <span>
-          Final: {formatCurrency(data[data.length - 1]?.equity || initialCapital)}
-        </span>
-      </div>
     </div>
   );
-};
-
-export default EquityCurve;
+}

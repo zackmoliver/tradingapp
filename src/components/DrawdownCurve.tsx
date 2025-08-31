@@ -8,7 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { formatPercentage, formatDate } from '../utils/formatters';
+import { toPct, chartTickFormatter, parseMMDDYYYY } from '../lib/date';
 
 interface EquityPoint {
   t: string;
@@ -26,15 +26,17 @@ const DrawdownCurve: React.FC<DrawdownCurveProps> = ({ data = [], className = ''
   const ddSeries = data.map((point) => {
     runningMax = Math.max(runningMax, point.equity);
     const drawdown = runningMax > 0 ? (point.equity - runningMax) / runningMax : 0;
+    const parsedDate = parseMMDDYYYY(point.t);
     return {
       t: point.t,
+      date: parsedDate || new Date(),
       drawdown,
     };
-  });
+  }).filter(point => point.date); // Remove invalid dates
 
   return (
     <div className={className}>
-      <h2 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center space-x-2">
+      <h2 className="subsection-title mb-6 flex items-center gap-2">
         {/* Optional: use an icon here */}
         <span>Drawdown Curve</span>
       </h2>
@@ -42,19 +44,19 @@ const DrawdownCurve: React.FC<DrawdownCurveProps> = ({ data = [], className = ''
         <LineChart data={ddSeries}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
           <XAxis
-            dataKey="t"
+            dataKey="date"
             stroke="#737373"
             fontSize={12}
-            tickFormatter={(val) => formatDate(val, 'short')}
+            tickFormatter={chartTickFormatter}
           />
           <YAxis
             stroke="#737373"
             fontSize={12}
-            tickFormatter={(val) => formatPercentage(val)}
+            tickFormatter={toPct}
           />
           <Tooltip
-            formatter={(value: number) => [formatPercentage(value), 'Drawdown']}
-            labelFormatter={(label) => `Date: ${formatDate(label)}`}
+            formatter={(value: number) => [toPct(value), 'Drawdown']}
+            labelFormatter={(label) => `Date: ${chartTickFormatter(label)}`}
             contentStyle={{
               backgroundColor: '#ffffff',
               border: '1px solid #e5e5e5',

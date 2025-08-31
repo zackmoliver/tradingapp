@@ -1,292 +1,184 @@
-/**
- * Result Summary Component
- * 
- * Professional summary cards displaying key backtest metrics:
- * - Strategy name and configuration
- * - Date range with duration
- * - Trade statistics
- * - Performance metrics (Win Rate, CAGR, Max Drawdown)
- * 
- * Updates instantly when new BacktestSummary data arrives.
- */
-
-import React, { useState } from 'react';
-import {
-  TrendingUp,
-  TrendingDown,
-  Calendar,
-  Target,
-  Award,
-  AlertTriangle,
-  BarChart3,
-  Download,
-  CheckCircle
-} from 'lucide-react';
-import { BacktestSummary } from '../types/backtest';
-import { safeExportBacktestToCsv } from '../lib/exportCsv';
-import { showSuccessToast, showErrorToast } from '../lib/toast';
+import React from "react";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import Tooltip from "@/components/ui/Tooltip";
+import { BacktestSummary } from "@/types/backtest";
+import { calculateAllMetrics, formatMetric, getMetricColor, METRIC_DESCRIPTIONS } from "@/lib/metrics";
+import { BenchmarkMetrics, formatBenchmarkMetrics, getMetricColor as getBenchmarkColor } from "@/lib/benchmark";
+import { toPct, toMoney } from "@/lib/date";
 
 interface ResultSummaryProps {
-  summary: BacktestSummary;
-  className?: string;
+  rows?: [string, string][];
+  summary?: BacktestSummary;
+  benchmarkMetrics?: BenchmarkMetrics;
 }
 
-interface SummaryCardProps {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ReactNode;
-  trend?: 'up' | 'down' | 'neutral';
-  color?: 'success' | 'danger' | 'warning' | 'neutral' | 'primary';
-  className?: string;
-}
+export default function ResultSummary({ rows, summary, benchmarkMetrics }: ResultSummaryProps) {
+  // If we have a BacktestSummary, calculate and display enhanced metrics
+  if (summary) {
+    const metrics = calculateAllMetrics(summary.equity_curve, summary.trade_log);
 
-const SummaryCard: React.FC<SummaryCardProps> = ({
-  title,
-  value,
-  subtitle,
-  icon,
-  trend = 'neutral',
-  color = 'neutral',
-  className = ''
-}) => {
-  const colorClasses = {
-    success: 'bg-success-50 border-success-200 text-success-800',
-    danger: 'bg-danger-50 border-danger-200 text-danger-800',
-    warning: 'bg-warning-50 border-warning-200 text-warning-800',
-    neutral: 'bg-neutral-50 border-neutral-200 text-neutral-800',
-    primary: 'bg-primary-50 border-primary-200 text-primary-800'
-  };
+    const enhancedRows: Array<{ key: string; label: string; value: string; color?: string; tooltip?: string }> = [
+      // Basic metrics
+      { key: 'cagr', label: 'CAGR', value: toPct(summary.cagr), color: getMetricColor(summary.cagr) },
+      { key: 'trades', label: 'Total Trades', value: summary.trades.toString() },
+      { key: 'win_rate', label: 'Win Rate', value: toPct(summary.win_rate), color: getMetricColor(summary.win_rate) },
+      { key: 'max_dd', label: 'Max Drawdown', value: toPct(Math.abs(summary.max_dd)), color: getMetricColor(summary.max_dd, false) },
 
-  const iconColorClasses = {
-    success: 'text-success-600',
-    danger: 'text-danger-600',
-    warning: 'text-warning-600',
-    neutral: 'text-neutral-600',
-    primary: 'text-primary-600'
-  };
+      // Advanced metrics with tooltips
+      {
+        key: 'sharpe',
+        label: 'Sharpe Ratio',
+        value: formatMetric(metrics.sharpe),
+        color: getMetricColor(metrics.sharpe),
+        tooltip: METRIC_DESCRIPTIONS.sharpe
+      },
+      {
+        key: 'sortino',
+        label: 'Sortino Ratio',
+        value: formatMetric(metrics.sortino),
+        color: getMetricColor(metrics.sortino),
+        tooltip: METRIC_DESCRIPTIONS.sortino
+      },
+      {
+        key: 'profit_factor',
+        label: 'Profit Factor',
+        value: formatMetric(metrics.profitFactor),
+        color: getMetricColor(metrics.profitFactor),
+        tooltip: METRIC_DESCRIPTIONS.profitFactor
+      },
+      {
+        key: 'volatility',
+        label: 'Volatility',
+        value: toPct(metrics.volatility),
+        color: getMetricColor(metrics.volatility, false),
+        tooltip: METRIC_DESCRIPTIONS.volatility
+      }
+    ];
 
-  const trendIcon = trend === 'up' ? (
-    <TrendingUp className="w-4 h-4 text-success-500" />
-  ) : trend === 'down' ? (
-    <TrendingDown className="w-4 h-4 text-danger-500" />
-  ) : null;
+    return (
+      <Card>
+        <CardHeader title="Performance Summary" subtitle={`${summary.symbol} • ${summary.start} to ${summary.end}`} />
+        <CardBody>
+          <dl className="grid grid-cols-1 gap-3">
+            {enhancedRows.map((row) => (
+              <div key={row.key} className="flex items-center justify-between border-b last:border-b-0 border-slate-200 dark:border-slate-800 py-2">
+                <dt className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  {row.label}
+                  {row.tooltip && (
+                    <Tooltip content={row.tooltip}>
+                      <span className="text-xs text-slate-400 cursor-help">ⓘ</span>
+                    </Tooltip>
+                  )}
+                </dt>
+                <dd className={`text-sm font-medium ${row.color || 'text-slate-900 dark:text-slate-100'}`}>
+                  {row.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
 
-  return (
-    <div className={`summary-card bg-white rounded-lg border shadow-sm p-6 transition-all duration-200 hover:shadow-md ${className}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center space-x-2 mb-2">
-            <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-              <div className={iconColorClasses[color]}>
-                {icon}
+          {/* Benchmark Metrics Section */}
+          {benchmarkMetrics && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                Benchmark Comparison
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      Alpha
+                      <Tooltip content="Excess return over benchmark after adjusting for risk (beta). Positive alpha indicates outperformance.">
+                        <span className="text-xs text-slate-400 cursor-help">ⓘ</span>
+                      </Tooltip>
+                    </span>
+                    <span className={`text-xs font-medium ${getBenchmarkColor(benchmarkMetrics.alpha, 'alpha')}`}>
+                      {formatBenchmarkMetrics(benchmarkMetrics).alpha}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      Beta
+                      <Tooltip content="Sensitivity to benchmark movements. 1.0 = same volatility as benchmark, >1.0 = more volatile.">
+                        <span className="text-xs text-slate-400 cursor-help">ⓘ</span>
+                      </Tooltip>
+                    </span>
+                    <span className={`text-xs font-medium ${getBenchmarkColor(benchmarkMetrics.beta, 'beta')}`}>
+                      {formatBenchmarkMetrics(benchmarkMetrics).beta}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      Correlation
+                      <Tooltip content="How closely the portfolio moves with the benchmark. 1.0 = perfect correlation.">
+                        <span className="text-xs text-slate-400 cursor-help">ⓘ</span>
+                      </Tooltip>
+                    </span>
+                    <span className={`text-xs font-medium ${getBenchmarkColor(benchmarkMetrics.correlation, 'correlation')}`}>
+                      {formatBenchmarkMetrics(benchmarkMetrics).correlation}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      Info Ratio
+                      <Tooltip content="Risk-adjusted excess return. Higher values indicate better risk-adjusted outperformance.">
+                        <span className="text-xs text-slate-400 cursor-help">ⓘ</span>
+                      </Tooltip>
+                    </span>
+                    <span className={`text-xs font-medium ${getBenchmarkColor(benchmarkMetrics.information_ratio, 'ir')}`}>
+                      {formatBenchmarkMetrics(benchmarkMetrics).informationRatio}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            {trendIcon}
-          </div>
-          
-          <h3 className="text-sm font-medium text-neutral-600 mb-1">
-            {title}
-          </h3>
-          
-          <p className="text-2xl font-bold text-neutral-900 mb-1">
-            {value}
-          </p>
-          
-          {subtitle && (
-            <p className="text-sm text-neutral-500">
-              {subtitle}
-            </p>
           )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
-const ResultSummary: React.FC<ResultSummaryProps> = ({ summary, className = '' }) => {
-  // CSV export state
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(false);
+          {/* Additional details section */}
+          {(summary.trade_log && summary.trade_log.length > 0) && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                <div>Avg Return: {toPct(metrics.averageReturn)}</div>
+                <div>Downside Vol: {toPct(metrics.downsideVolatility)}</div>
+                <div>Strategy: {summary.strategy}</div>
+              </div>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+    );
+  }
 
-  // Format percentage values to 2 decimal places
-  const formatPercentage = (value: number): string => {
-    return `${(value * 100).toFixed(2)}%`;
-  };
+  // Fallback to legacy rows format
+  if (rows) {
+    return (
+      <Card>
+        <CardHeader title="Performance Summary" />
+        <CardBody>
+          <dl className="grid grid-cols-1 gap-4">
+            {rows.map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between border-b last:border-b-0 border-slate-200 dark:border-slate-800 py-2">
+                <dt className="text-sm text-slate-500 dark:text-slate-400">{k}</dt>
+                <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </CardBody>
+      </Card>
+    );
+  }
 
-  // Format number values
-  const formatNumber = (value: number): string => {
-    return value.toLocaleString();
-  };
-
-  // Handle CSV export
-  const handleCsvExport = async () => {
-    if (isExporting) return;
-
-    setIsExporting(true);
-    setExportSuccess(false);
-
-    try {
-      await safeExportBacktestToCsv(summary);
-      setExportSuccess(true);
-
-      // Show success toast
-      showSuccessToast('CSV exported', 'Backtest data has been exported successfully');
-
-      // Reset success state after 3 seconds
-      setTimeout(() => setExportSuccess(false), 3000);
-    } catch (error) {
-      console.error('CSV export failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      showErrorToast('Export failed', `Failed to export CSV: ${errorMessage}`);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // Calculate date range duration
-  const calculateDuration = (start: string, end: string): string => {
-    try {
-      const startDate = new Date(start);
-      const endDate = new Date(end);
-      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays < 30) {
-        return `${diffDays} days`;
-      } else if (diffDays < 365) {
-        const months = Math.round(diffDays / 30);
-        return `${months} month${months > 1 ? 's' : ''}`;
-      } else {
-        const years = Math.round(diffDays / 365);
-        return `${years} year${years > 1 ? 's' : ''}`;
-      }
-    } catch {
-      return 'Unknown duration';
-    }
-  };
-
-  // Determine trend and color for metrics
-  const getWinRateColor = (winRate: number) => {
-    if (winRate >= 0.7) return 'success';
-    if (winRate >= 0.5) return 'warning';
-    return 'danger';
-  };
-
-  const getCAGRColor = (cagr: number) => {
-    if (cagr >= 0.15) return 'success';
-    if (cagr >= 0.05) return 'warning';
-    return 'danger';
-  };
-
-  const getDrawdownColor = (drawdown: number) => {
-    const absDrawdown = Math.abs(drawdown);
-    if (absDrawdown <= 0.1) return 'success';
-    if (absDrawdown <= 0.2) return 'warning';
-    return 'danger';
-  };
-
+  // Empty state
   return (
-    <div className={`result-summary ${className}`}>
-      {/* Header with Download Button */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-neutral-900">
-          Performance Summary
-        </h2>
-
-        <button
-          onClick={handleCsvExport}
-          disabled={isExporting}
-          className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md transition-all duration-200 ${
-            exportSuccess
-              ? 'text-success-700 bg-success-50 border-success-200'
-              : isExporting
-              ? 'text-neutral-500 bg-neutral-100 border-neutral-200 cursor-not-allowed'
-              : 'text-neutral-700 bg-white border-neutral-300 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
-          }`}
-        >
-          {exportSuccess ? (
-            <>
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Downloaded!
-            </>
-          ) : isExporting ? (
-            <>
-              <div className="w-4 h-4 mr-2 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </>
-          )}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Strategy Card */}
-        <SummaryCard
-          title="Strategy"
-          value={summary.strategy}
-          subtitle="Trading strategy used"
-          icon={<BarChart3 className="w-5 h-5" />}
-          color="primary"
-          trend="neutral"
-        />
-
-        {/* Date Range Card */}
-        <SummaryCard
-          title="Date Range"
-          value={`${summary.start} - ${summary.end}`}
-          subtitle={calculateDuration(summary.start, summary.end)}
-          icon={<Calendar className="w-5 h-5" />}
-          color="neutral"
-          trend="neutral"
-        />
-
-        {/* Trades Card */}
-        <SummaryCard
-          title="Total Trades"
-          value={formatNumber(summary.trades)}
-          subtitle="Executed positions"
-          icon={<Target className="w-5 h-5" />}
-          color="neutral"
-          trend="neutral"
-        />
-
-        {/* Win Rate Card */}
-        <SummaryCard
-          title="Win Rate"
-          value={formatPercentage(summary.win_rate)}
-          subtitle="Successful trades"
-          icon={<Award className="w-5 h-5" />}
-          color={getWinRateColor(summary.win_rate)}
-          trend={summary.win_rate > 0.5 ? 'up' : 'down'}
-        />
-
-        {/* CAGR Card */}
-        <SummaryCard
-          title="CAGR"
-          value={formatPercentage(summary.cagr)}
-          subtitle="Compound Annual Growth Rate"
-          icon={<TrendingUp className="w-5 h-5" />}
-          color={getCAGRColor(summary.cagr)}
-          trend={summary.cagr > 0 ? 'up' : 'down'}
-        />
-
-        {/* Max Drawdown Card */}
-        <SummaryCard
-          title="Max Drawdown"
-          value={formatPercentage(Math.abs(summary.max_dd))}
-          subtitle="Maximum portfolio decline"
-          icon={<AlertTriangle className="w-5 h-5" />}
-          color={getDrawdownColor(summary.max_dd)}
-          trend="down"
-        />
-      </div>
-    </div>
+    <Card>
+      <CardHeader title="Performance Summary" />
+      <CardBody>
+        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+          No performance data available
+        </div>
+      </CardBody>
+    </Card>
   );
-};
-
-export default ResultSummary;
+}

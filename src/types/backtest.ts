@@ -13,15 +13,112 @@ export interface BacktestPoint {
   drawdown: number;    // Drawdown percentage
 }
 
+export interface Trade {
+  date: string; // MM/DD/YYYY
+  side: 'BUY' | 'SELL' | 'COVER' | 'ASSIGN';
+  qty: number;
+  price: number;
+  pnl: number;
+  cum_pnl: number;
+  note?: string;
+}
+
 export interface BacktestSummary {
   strategy: string;
+  symbol: string;      // Added to match Rust struct
   start: string;       // MM/DD/YYYY format
   end: string;         // MM/DD/YYYY format
+  capital: number;     // Added to match Rust struct
   trades: number;
   win_rate: number;    // 0.0 to 1.0
   cagr: number;        // Compound Annual Growth Rate
   max_dd: number;      // Maximum drawdown (negative value)
+
+  // Enhanced metrics from new backtest engine
+  sharpe?: number;     // Sharpe ratio (legacy)
+  sortino?: number;    // Sortino ratio (legacy)
+  profit_factor?: number; // Profit factor (legacy)
+
+  // New enhanced metrics
+  sharpeRatio?: number;        // Enhanced Sharpe ratio
+  sortinoRatio?: number;       // Enhanced Sortino ratio
+  profitFactor?: number;       // Enhanced profit factor
+  calmarRatio?: number;        // CAGR / Max Drawdown
+  var95?: number;              // Value at Risk (95%)
+  expectedShortfall?: number;  // Conditional VaR
+  statisticalPower?: number;   // Statistical significance (0-1)
+  volatility?: number;         // Annualized volatility
+
+  // Trade statistics
+  totalTrades?: number;        // Total number of trades
+  winningTrades?: number;      // Number of winning trades
+  losingTrades?: number;       // Number of losing trades
+  avgWin?: number;             // Average winning trade
+  avgLoss?: number;            // Average losing trade
+
   equity_curve: BacktestPoint[];
+  trade_log?: Trade[]; // Individual trades
+  warning?: string;    // Optional warning message for data issues
+  warnings?: string[]; // Multiple statistical warnings
+}
+
+export interface IntelligenceInputs {
+  symbol: string;
+  start: string; // MM/DD/YYYY
+  end: string;   // MM/DD/YYYY
+  strategy: string;
+  capital: number;
+  indicators: Record<string, number | boolean>;
+  seed: number;
+}
+
+export interface MetricDelta {
+  name: 'Win Rate' | 'CAGR' | 'Max Drawdown';
+  baseline: number;
+  expected: number;
+  unit: '%';
+}
+
+export interface Recommendation {
+  parameters: Record<string, number | string | boolean>;
+  rationale: string[];
+  confidence: number; // 0-1
+  estimated: {
+    win_rate: number;
+    cagr: number;
+    max_dd: number;
+  };
+}
+
+export interface IntelligenceSummary {
+  inputs: IntelligenceInputs;
+  regime: 'BULL_TREND' | 'BEAR_TREND' | 'SIDEWAYS_LOW_VOL' | 'SIDEWAYS_HIGH_VOL' | 'EVENT_RISK';
+  volatility: {
+    ivRank: number;      // 0-100 percentile
+    term: number;        // Term structure slope
+    skew: number;        // Put/call skew
+    approx: boolean;     // True if estimated
+  };
+  ml: {
+    probability: number;   // 0-1 ML probability
+    confidence: number;    // 0-1 ML confidence
+    topFeatures: string[]; // Top 5 features
+    modelVersion: string;  // Model version
+  };
+  confidence: number;    // 0-1 overall confidence in analysis
+  recommendation: {
+    strategy: string;
+    params?: Record<string, any>;
+    horizonDays: number;
+  };
+  rationale: string[];   // Top 3 reasons for recommendation
+  allocation?: {
+    market_state: string;
+    allocations: Record<string, number>;
+  };
+  metrics?: MetricDelta[];
+  notes?: string[];
+  raw?: any;
 }
 
 // For compatibility with existing components

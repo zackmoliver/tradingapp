@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { TradeFiltersComponent } from '../TradeFilters';
-import { TradeFilters } from '../../types/backtest';
+import TradeFiltersComponent, { TradeFilters } from '../trade-finder/TradeFilters';
 
 describe('TradeFiltersComponent', () => {
   const mockOnFiltersChange = jest.fn();

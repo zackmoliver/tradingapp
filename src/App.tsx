@@ -1,82 +1,90 @@
-import { NavLink, Routes, Route } from "react-router-dom";
-import "./App.css";
+import React, { useEffect } from "react";
+import { Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
+import BacktestPage from "@/pages/BacktestPage";
+import Analyzer from "@/pages/Analyzer";
+import TradeFinderPage from "@/pages/TradeFinderPage";
+import Intelligence from "@/pages/Intelligence";
+import { useTheme } from "@/theme/ThemeContext";
+import { useAppBus } from "@/context/AppBus";
+import { QAOverlay } from "@/components/QAOverlay";
+import { useQAMode } from "@/hooks/useQAMode";
+import "@/lib/qa"; // force registry to attach window.__qa
+// make sure the registry runs and sets window.__qa
+import "@/lib/qa";
 
-import Backtest from "./pages/Backtest";
-import Analyzer from "./pages/Analyzer";
-import { TradeFinderPage } from "./pages/TradeFinderPage";
-import { Settings } from "./pages/Settings";
-import HealthStatusBadge from "./components/HealthStatusBadge";
-
-export default function App() {
-  return (
-    <div className="app min-h-screen bg-neutral-50">
-      {/* Top bar / tabs */}
-      <header className="app-header bg-white shadow-sm border-b border-neutral-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TE</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-neutral-900">Trading Engine</h1>
-                <p className="text-xs text-neutral-500">Professional Options Analytics</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {/* Tabs */}
-              <nav className="flex gap-2">
-                <Tab to="/backtest" label="Backtest" />
-                <Tab to="/analyzer" label="Analyzer" />
-                <Tab to="/trade-finder" label="Trade Finder" />
-                <Tab to="/settings" label="Settings" />
-              </nav>
-
-              {/* Health Status Badge */}
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-gray-500">Backend:</span>
-                <HealthStatusBadge size="md" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Routed views */}
-      <main className="app-main">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Routes>
-            <Route path="/" element={<Backtest />} />
-            <Route path="/backtest" element={<Backtest />} />
-            <Route path="/analyzer" element={<Analyzer />} />
-            <Route path="/trade-finder" element={<TradeFinderPage />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="app-footer bg-white border-t border-neutral-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-sm text-neutral-500">
-          Trading Engine v1.0.0 — Tauri v2 + React 18 + TypeScript
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function Tab({ to, label }: { to: string; label: string }) {
+function TabLink({ to, children }:{ to: string; children: React.ReactNode }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `px-3 py-1 rounded-md text-sm ${
-          isActive ? "bg-primary-600 text-white" : "hover:bg-neutral-100"
+        `px-3 py-2 rounded-md text-sm font-medium ${
+          isActive ? "bg-blue-600 text-white" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
         }`
       }
     >
-      {label}
+      {children}
     </NavLink>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <button
+      onClick={toggle}
+      className="ml-auto px-3 py-2 rounded-md text-sm font-medium border border-slate-300 dark:border-slate-600
+                 hover:bg-slate-100 dark:hover:bg-slate-700"
+      aria-label="Toggle dark mode"
+      title="Toggle dark mode"
+    >
+      {theme === 'dark' ? '🌙 Dark' : '☀️ Light'}
+    </button>
+  );
+}
+
+export default function App() {
+  const navigate = useNavigate();
+  const { onNavigateToBacktest } = useAppBus();
+  const qaMode = useQAMode();
+
+  // Set up navigation callback for AppBus
+  useEffect(() => {
+    onNavigateToBacktest(() => {
+      navigate('/backtest');
+    });
+  }, [navigate, onNavigateToBacktest]);
+
+  return (
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+      <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-2">
+          <div className="text-slate-900 dark:text-slate-100 font-semibold mr-4">Trading Engine</div>
+          <div className="flex gap-2">
+            <TabLink to="/backtest">Backtest</TabLink>
+            <TabLink to="/analyzer">Analyzer</TabLink>
+            <TabLink to="/trade-finder">Trade Finder</TabLink>
+            <TabLink to="/intelligence">Intelligence</TabLink>
+          </div>
+          <ThemeToggle />
+        </div>
+      </nav>
+
+      <main className="max-w-[1600px] mx-auto p-6">
+        <Routes>
+          <Route path="/" element={<Navigate to="/backtest" replace />} />
+          <Route path="/backtest" element={<BacktestPage />} />
+          <Route path="/analyzer" element={<Analyzer />} />
+          <Route path="/trade-finder" element={<TradeFinderPage />} />
+          <Route path="/intelligence" element={<Intelligence />} />
+          <Route path="*" element={<div className="text-slate-600 dark:text-slate-300">Not found</div>} />
+        </Routes>
+      </main>
+
+      {/* QA Overlay */}
+      <QAOverlay
+        isVisible={qaMode.isVisible}
+        onClose={qaMode.hide}
+      />
+    </div>
   );
 }

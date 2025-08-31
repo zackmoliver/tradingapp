@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* small design tokens used throughout */
+.section-title { @apply text-2xl font-semibold text-slate-900; }
+.subsection-title { @apply text-lg font-semibold text-slate-900; }
+.caption-text { @apply text-sm text-slate-500; }
+.card { @apply bg-white rounded-xl shadow border border-slate-200; }
+.card-padding { @apply p-6; }
+.card-header-height { @apply h-12; }
+.tab-link { @apply inline-flex items-center px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100; }
+.tab-link-active { @apply bg-blue-600 text-white hover:bg-blue-600; }

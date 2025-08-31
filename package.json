@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Professional Options Trading Engine Frontend",
   "scripts": {
+    "preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1",
     "free:8080": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue).OwningProcess; if($p){Stop-Process -Id $p -Force}\"",
     "predev": "npm run free:8080",
-    "dev": "vite --port 8080 --strictPort",
+    "dev": "vite --port 8080",
     "build": "tsc && vite build",
     "preview": "vite preview --port 8080 --strictPort",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -21,11 +22,13 @@
     "tauri:build:desktop": "node scripts/build-desktop.cjs",
     "tauri:build:clean": "node scripts/build-desktop.cjs --clean-all",
     "tauri:info": "tauri info",
-    "tauri:version": "tauri -v"
+    "tauri:version": "tauri -v",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tauri-apps/plugin-fs": "^2.4.2",
     "chart.js": "^4.5.0",
-    "clsx": "^2.0.0",
+    "clsx": "^2.1.1",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.294.0",
     "plotly.js": "^2.27.0",

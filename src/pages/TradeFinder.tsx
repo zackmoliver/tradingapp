@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { STRATEGY_OPTIONS, BacktestSummary, BacktestParams } from "@/types/backtest";
 
 export default function TradeFinderPage() {

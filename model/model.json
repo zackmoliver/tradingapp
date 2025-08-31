@@ -1,0 +1,109 @@
+{
+  "model_type": "logistic_regression",
+  "version": "1.0.0",
+  "created": "2024-01-15",
+  "description": "Options trading signal prediction model",
+  "intercept": -0.2847,
+  "features": [
+    "price_vs_sma200",
+    "sma50_vs_sma200", 
+    "ema12_minus_ema26",
+    "rsi14_z",
+    "macd_hist_z",
+    "atr14_pct",
+    "bb_pos",
+    "iv_rank",
+    "term_slope",
+    "skew_25d",
+    "rsp_spy_slope",
+    "pct_above_200dma",
+    "news_sentiment",
+    "earnings_window"
+  ],
+  "coefficients": [
+    0.4521,
+    0.3892,
+    0.2156,
+    -0.1834,
+    0.2967,
+    -0.0892,
+    0.1456,
+    0.0734,
+    0.1289,
+    -0.0567,
+    0.2134,
+    0.3456,
+    0.1823,
+    -0.0923
+  ],
+  "feature_scaling": {
+    "price_vs_sma200": {"mean": 0.0234, "std": 0.1456},
+    "sma50_vs_sma200": {"mean": 0.0123, "std": 0.0892},
+    "ema12_minus_ema26": {"mean": 0.0045, "std": 0.0234},
+    "rsi14_z": {"mean": 0.0, "std": 1.0},
+    "macd_hist_z": {"mean": 0.0, "std": 1.0},
+    "atr14_pct": {"mean": 0.0234, "std": 0.0156},
+    "bb_pos": {"mean": 0.5, "std": 0.289},
+    "iv_rank": {"mean": 0.45, "std": 0.234},
+    "term_slope": {"mean": 0.0123, "std": 0.0456},
+    "skew_25d": {"mean": -0.0234, "std": 0.0789},
+    "rsp_spy_slope": {"mean": 0.0012, "std": 0.0234},
+    "pct_above_200dma": {"mean": 0.567, "std": 0.234},
+    "news_sentiment": {"mean": 0.0, "std": 0.5},
+    "earnings_window": {"mean": 0.0, "std": 1.0}
+  },
+  "performance_metrics": {
+    "accuracy": 0.672,
+    "precision": 0.689,
+    "recall": 0.634,
+    "f1_score": 0.661,
+    "auc_roc": 0.723
+  },
+  "recommendation_thresholds": {
+    "high_confidence": 0.70,
+    "medium_confidence": 0.55,
+    "low_confidence": 0.45
+  },
+  "strategy_mappings": {
+    "score_gte_0.70": {
+      "strategy": "PMCC",
+      "parameters": {
+        "short_delta": 0.25,
+        "short_dte": 35,
+        "long_delta": 0.70,
+        "long_dte": 365,
+        "profit_target": 0.50,
+        "stop_loss": 2.0
+      }
+    },
+    "score_0.55_to_0.70": {
+      "strategy": "PMCC_Conservative", 
+      "parameters": {
+        "short_delta": 0.20,
+        "short_dte": 30,
+        "long_delta": 0.75,
+        "long_dte": 300,
+        "profit_target": 0.40,
+        "stop_loss": 1.5
+      }
+    },
+    "score_0.45_to_0.55": {
+      "strategy": "Wheel",
+      "parameters": {
+        "put_delta": 0.20,
+        "put_dte": 30,
+        "cc_delta": 0.25,
+        "cc_dte": 30,
+        "profit_target": 0.50,
+        "assignment_ok": true
+      }
+    },
+    "score_lt_0.45": {
+      "strategy": "Cash",
+      "parameters": {
+        "reason": "Low confidence signal",
+        "wait_for": "Better setup"
+      }
+    }
+  }
+}
